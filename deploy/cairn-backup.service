@@ -1,0 +1,12 @@
+[Unit]
+Description=Backup Cairn PostgreSQL database
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=cairn
+Group=cairn
+EnvironmentFile=/etc/cairn/cairn.env
+Environment=BACKUP_DIR=/var/backups/cairn
+ExecStart=/opt/cairn/deploy/backup-postgres.sh

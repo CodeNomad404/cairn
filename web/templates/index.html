@@ -1,0 +1,45 @@
+{{define "index"}}
+{{template "site-start" .}}
+
+  <main class="max-w-3xl mx-auto px-4 py-12 w-full">
+    <div class="flex items-end justify-between mb-8">
+      <h1 class="text-3xl font-extrabold tracking-tight">文章列表</h1>
+      {{if and .User (eq .User.Role "admin")}}
+      <a href="/upload" class="text-sm text-muted hover:text-accent transition-colors font-medium">
+        发布文章 →
+      </a>
+      {{end}}
+    </div>
+
+    {{if .Posts}}
+      <div class="grid gap-3">
+        {{range .Posts}}
+        <a href="/posts/{{pathEscape .Slug}}" class="group block bg-white border border-muted-border rounded-card p-5 hover:shadow-card hover:border-gray-200 transition-all">
+          <div class="flex items-start justify-between gap-4">
+            <div class="min-w-0">
+              <h2 class="font-semibold group-hover:text-accent transition-colors truncate">{{.Title}}</h2>
+              {{if .PublishedAt}}
+              <time class="text-xs text-muted-light mt-1.5 inline-block" datetime="{{.PublishedAt.Format "2006-01-02"}}">
+                {{.PublishedAt.Format "2006-01-02"}}
+              </time>
+              {{end}}
+            </div>
+            <svg class="mt-0.5 flex-shrink-0 text-muted-light group-hover:text-accent group-hover:translate-x-1 transition-all" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </div>
+        </a>
+        {{end}}
+      </div>
+    {{else}}
+      <div class="text-center py-16 bg-white border border-dashed border-muted-border rounded-card">
+        <p class="text-muted-light mb-3">还没有文章。</p>
+        <a href="/upload" class="inline-block px-4 py-2 bg-accent text-white text-sm font-medium rounded-lg hover:bg-[#0052a3] transition-colors">
+          上传第一篇 →
+        </a>
+      </div>
+    {{end}}
+  </main>
+
+{{template "site-end" .}}
+{{end}}

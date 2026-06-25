@@ -1,0 +1,26 @@
+{{define "home"}}
+{{template "page-start" .}}
+
+  <main class="flex-1 flex items-center justify-center px-4">
+    <div class="text-center">
+      <h1 class="welcome-title">
+        Cairn
+      </h1>
+      <p class="mb-1 text-2xl font-medium text-black">
+        山野里的石堆路标
+      </p>
+      <p class="mb-12 text-xl text-black">
+        记录技术路上的每一个路标，分享给同行的人。
+      </p>
+      <a href="/posts" class="btn-enter">进入博客</a>
+    </div>
+  </main>
+
+  <footer class="py-6 text-center text-xs text-black">
+    <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener" class="text-black hover:text-gray-600 no-underline">
+      京ICP备2026031886号
+    </a>
+  </footer>
+
+{{template "page-end" .}}
+{{end}}

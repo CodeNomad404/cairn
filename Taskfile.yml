@@ -1,0 +1,37 @@
+version: '3'
+
+tasks:
+  dev:
+    desc: Start development with hot reload
+    cmds:
+      - air
+
+  build:
+    desc: Build binary
+    cmds:
+      - go build -o bin/cairn ./cmd/server
+
+  lint:
+    desc: Run linter
+    cmds:
+      - golangci-lint run
+
+  db:up:
+    desc: Start PostgreSQL
+    cmds:
+      - docker compose up -d
+
+  db:down:
+    desc: Stop PostgreSQL
+    cmds:
+      - docker compose down
+
+  db:migrate:
+    desc: Run database migrations
+    cmds:
+      - migrate -path migrations -database "postgres://cairn:{{.DB_PASSWORD}}@localhost:5432/cairn?sslmode=disable" up
+
+  tidy:
+    desc: Tidy Go modules
+    cmds:
+      - go mod tidy

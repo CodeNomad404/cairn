@@ -1,0 +1,98 @@
+{{define "comment-section"}}
+<div id="comment-section">
+  <h2 class="text-lg font-bold mb-6">评论</h2>
+
+  {{if .Comments}}
+  <ul class="space-y-4 mb-8">
+    {{range .Comments}}
+    <li class="border border-muted-border rounded-lg p-4">
+      <div class="flex items-center gap-3 mb-2">
+        <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-accent-subtle text-accent text-xs font-bold flex-shrink-0">
+          {{firstChar .Username}}
+        </span>
+        <div class="min-w-0">
+          <span class="font-medium text-sm">{{.Username}}</span>
+          <time class="text-xs text-muted-light ml-2" datetime="{{.CreatedAt.Format "2006-01-02"}}">
+            {{.CreatedAt.Format "2006-01-02 15:04"}}
+          </time>
+        </div>
+      </div>
+      <p class="text-gray-700 text-sm whitespace-pre-line leading-relaxed">{{.Content}}</p>
+      <button
+        class="text-xs text-muted-light hover:text-accent mt-2 transition-colors font-medium"
+        data-reply-to="{{.ID}}"
+        type="button">
+        回复
+      </button>
+
+      {{if .Replies}}
+      <ul class="ml-4 mt-3 space-y-2 border-l-2 border-accent-subtle pl-4">
+        {{range .Replies}}
+        <li>
+          <div class="flex items-center gap-2 mb-1">
+            <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-accent-subtle text-accent text-xs font-bold flex-shrink-0">
+              {{firstChar .Username}}
+            </span>
+            <span class="font-medium text-sm">{{.Username}}</span>
+            <time class="text-xs text-muted-light" datetime="{{.CreatedAt.Format "2006-01-02"}}">
+              {{.CreatedAt.Format "2006-01-02 15:04"}}
+            </time>
+          </div>
+          <p class="text-gray-700 text-sm whitespace-pre-line leading-relaxed ml-8">{{.Content}}</p>
+        </li>
+        {{end}}
+      </ul>
+      {{end}}
+    </li>
+    {{end}}
+  </ul>
+  {{else}}
+  <p class="text-sm text-muted-light mb-8 bg-gray-50 rounded-lg p-4 text-center">暂无评论，来说点什么吧。</p>
+  {{end}}
+
+  {{template "comment-form" .}}
+</div>
+{{end}}
+
+{{define "comment-form"}}
+{{if .User}}
+{{/* 已登录：只显示内容框 */}}
+<form
+  id="comment-form"
+  hx-post="/posts/{{pathEscape .Slug}}/comments"
+  hx-target="#comment-section"
+  hx-swap="outerHTML"
+  hx-indicator="#comment-spinner"
+  class="space-y-4 border-t pt-6 mt-6"
+>
+  <input type="hidden" name="parent_id" id="comment-parent-id" value="">
+  <div>
+    <label class="block text-xs font-medium text-gray-700 mb-1.5">
+      以 <span class="font-bold text-gray-900">{{.User.Username}}</span> 的身份评论
+    </label>
+    <textarea
+      name="content" required maxlength="4000" rows="3"
+      class="w-full border border-muted-border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-shadow placeholder:text-muted-light resize-y"
+      placeholder="写点什么..."
+    ></textarea>
+  </div>
+  <div class="flex items-center gap-3">
+    <button
+      type="submit"
+      class="px-5 py-2.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-[#0052a3] transition-colors"
+    >
+      提交评论
+    </button>
+    <span id="comment-spinner" class="htmx-indicator text-sm text-muted-light">发送中...</span>
+  </div>
+</form>
+{{else}}
+{{/* 未登录：需要登录才能评论 */}}
+<div class="border-t pt-6 mt-6 text-center">
+  <p class="text-sm text-gray-400 mb-3">请先登录后再发表评论</p>
+  <a href="/login" class="inline-block px-5 py-2.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-[#0052a3] transition-colors">
+    去登录
+  </a>
+</div>
+{{end}}
+{{end}}

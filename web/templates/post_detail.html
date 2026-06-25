@@ -1,0 +1,32 @@
+{{define "post"}}
+{{template "site-start" .}}
+
+  <main class="max-w-3xl mx-auto px-4 py-10 w-full">
+    <a href="/posts" class="text-sm text-muted-light hover:text-gray-900 transition-colors inline-block mb-6">
+      ← 返回博客
+    </a>
+
+    <!-- 文章卡片 -->
+    <article class="bg-white border border-muted-border rounded-card p-6 sm:p-10 mb-10">
+      <header class="mb-8">
+        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight">{{.Post.Title}}</h1>
+        {{if .Post.PublishedAt}}
+        <time class="text-sm text-muted-light mt-3 inline-block" datetime="{{.Post.PublishedAt.Format "2006-01-02"}}">
+          {{.Post.PublishedAt.Format "2006-01-02"}}
+        </time>
+        {{end}}
+      </header>
+
+      <div class="prose max-w-none">
+        {{.Content}}
+      </div>
+    </article>
+
+    <!-- 评论卡片 -->
+    <div class="bg-white border border-muted-border rounded-card p-5 sm:p-8">
+      {{template "comment-section" .}}
+    </div>
+  </main>
+
+{{template "site-end" .}}
+{{end}}

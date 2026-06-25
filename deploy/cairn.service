@@ -1,0 +1,23 @@
+[Unit]
+Description=Cairn web service
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=cairn
+Group=cairn
+WorkingDirectory=/opt/cairn
+EnvironmentFile=/etc/cairn/cairn.env
+ExecStart=/opt/cairn/bin/cairn
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/cairn
+
+[Install]
+WantedBy=multi-user.target

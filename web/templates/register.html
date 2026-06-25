@@ -1,0 +1,46 @@
+{{define "register"}}
+{{template "site-start" .}}
+
+  <main class="max-w-sm mx-auto px-4 py-20 w-full">
+    <h1 class="text-2xl font-extrabold mb-8 text-center">注册</h1>
+
+    {{if .Error}}
+    <div class="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 mb-6 text-sm text-center">
+      {{.Error}}
+    </div>
+    {{end}}
+
+    <form method="POST" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">用户名</label>
+        <input
+          name="username" required maxlength="64"
+          class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
+          placeholder="起一个用户名（2–64 字符）"
+          autocomplete="username"
+        >
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">密码</label>
+        <input
+          name="password" type="password" required minlength="6"
+          class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
+          placeholder="至少 6 个字符"
+          autocomplete="new-password"
+        >
+      </div>
+      <button
+        type="submit"
+        class="w-full py-2.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-[#0052a3] transition-colors"
+      >
+        注册
+      </button>
+    </form>
+
+    <p class="text-center text-sm text-gray-400 mt-6">
+      已有账号？<a href="/login" class="text-accent hover:underline">登录</a>
+    </p>
+  </main>
+
+{{template "site-end" .}}
+{{end}}

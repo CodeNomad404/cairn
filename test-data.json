@@ -1,0 +1,77 @@
+{
+  "name": "cairn",
+  "version": "1.0.0",
+  "config": {
+    "server": {
+      "host": "0.0.0.0",
+      "port": 8080,
+      "tls": false
+    },
+    "database": {
+      "host": "localhost",
+      "port": 5432,
+      "name": "cairn",
+      "pool": {
+        "min": 5,
+        "max": 20,
+        "timeout": "30s"
+      }
+    },
+    "features": {
+      "comments": true,
+      "tools": [
+        "json-formatter",
+        "base64",
+        "timestamp"
+      ],
+      "auth": {
+        "enabled": true,
+        "methods": [
+          "password",
+          "oauth"
+        ]
+      }
+    }
+  },
+  "authors": [
+    {
+      "name": "codenomad",
+      "role": "admin",
+      "email": null
+    },
+    {
+      "name": "guest",
+      "role": "user",
+      "email": null
+    }
+  ],
+  "posts": [
+    {
+      "id": 1,
+      "title": "Cairn 的第一天",
+      "tags": [
+        "go",
+        "server",
+        "devops"
+      ],
+      "published": true,
+      "meta": {
+        "views": 1024,
+        "likes": 32
+      }
+    }
+  ],
+  "stats": {
+    "total_posts": 3,
+    "total_comments": 12,
+    "daily_visits": [
+      10,
+      15,
+      8,
+      22,
+      18,
+      30,
+      25
+    ]
+  }
+}

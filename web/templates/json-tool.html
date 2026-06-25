@@ -1,0 +1,57 @@
+{{define "json-tool"}}
+{{template "site-start" .}}
+
+  <main class="mx-auto w-full max-w-6xl px-4 py-8">
+    <div class="mb-6 flex items-center justify-between">
+      <div>
+        <a href="/tools" class="text-sm text-gray-400 transition-colors hover:text-gray-600">← 工具</a>
+        <h1 class="mt-1 text-2xl font-extrabold">JSON 格式化</h1>
+      </div>
+      <div class="flex items-center gap-2">
+        <button type="button" data-json-format class="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#0052a3]">
+          格式化
+        </button>
+        <button type="button" data-json-clear class="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-100">
+          清空
+        </button>
+      </div>
+    </div>
+
+    <div class="json-panels" id="json-panels">
+      <section class="json-panel" id="json-panel-left" aria-label="输入 JSON">
+        <div class="tool-panel-header">输入 JSON</div>
+        <div class="code-editor">
+          <pre class="line-nums" id="json-line-numbers">1</pre>
+          <textarea id="json-input" placeholder='{"key": "value", "nested": {"arr": [1, 2, 3]}}' spellcheck="false"></textarea>
+        </div>
+        <div id="input-error" class="hidden shrink-0 border-t border-red-100 bg-red-50 px-4 py-2 text-xs text-red-500"></div>
+      </section>
+
+      <div class="drag-handle" id="json-drag-handle" aria-hidden="true"></div>
+
+      <section class="json-panel" id="json-panel-right" aria-label="JSON 预览">
+        <div class="tool-panel-header flex items-center justify-between">
+          <span>预览</span>
+          <div class="flex items-center gap-2">
+            <button type="button" data-json-copy class="text-xs text-gray-400 transition-colors hover:text-accent">复制</button>
+            <button type="button" data-json-export class="text-xs text-gray-400 transition-colors hover:text-accent">导出</button>
+          </div>
+        </div>
+        <div id="json-preview" class="flex-1 overflow-auto p-4 text-sm">
+          <p class="mt-20 text-center text-gray-400">粘贴 JSON 后点击格式化</p>
+        </div>
+      </section>
+    </div>
+    <div class="h-10"></div>
+  </main>
+
+{{template "site-end" .}}
+{{end}}
+
+{{define "json-result"}}
+{{if .Error}}
+<div class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{.Error}}</div>
+{{else}}
+<pre class="rounded-lg border border-gray-200 bg-white p-4 text-sm">{{.Formatted}}</pre>
+{{end}}
+{{end}}

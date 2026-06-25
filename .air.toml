@@ -1,0 +1,23 @@
+# https://github.com/air-verse/air
+
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/main ./cmd/server"
+  entrypoint = "./tmp/main"
+  full_bin = ""
+  include_ext = ["go", "tpl", "tmpl", "html", "css"]
+  exclude_dir = ["tmp", "bin"]
+  include_dir = ["cmd", "internal", "web"]
+  delay = 1000
+  stop_on_error = false
+  env = ["GOPROXY=https://goproxy.cn,direct"]
+
+[log]
+  main_only = false
+  time = true
+
+[color]
+  main = "magenta"
+  app = "cyan"

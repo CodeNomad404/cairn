@@ -1,0 +1,12 @@
+{
+  "name": "cairn",
+  "private": true,
+  "scripts": {
+    "build:css": "tailwindcss -i web/static/css/input.css -o web/static/css/output.css",
+    "watch:css": "tailwindcss -i web/static/css/input.css -o web/static/css/output.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.0",
+    "@tailwindcss/typography": "^0.5.10"
+  }
+}

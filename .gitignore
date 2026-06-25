@@ -1,0 +1,25 @@
+# Binary
+bin/
+server
+
+# Environment
+.env
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+*.log
+
+# Node
+node_modules/
+
+# Temp
+tmp/
+backups/
+*.tgz
+
+# Content drafts
+docs/

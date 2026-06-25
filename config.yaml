@@ -1,0 +1,13 @@
+environment: development
+
+server:
+  host: 127.0.0.1
+  port: 8080
+
+database:
+  host: localhost
+  port: 5432
+  user: cairn
+  password: ${DB_PASSWORD}
+  name: cairn
+  sslmode: disable

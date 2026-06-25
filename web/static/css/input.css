@@ -1,0 +1,304 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* === 页面基调 === */
+html {
+  overflow-y: scroll;
+}
+html, body { height: 100%; }
+body {
+  background-color: #f5f5f5;
+}
+
+/* === 滚动条 === */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #f5f5f5; }
+::-webkit-scrollbar-thumb { background: #999; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #0066cc; }
+
+/* === 代码块 === */
+pre {
+  background-color: #1e1e2e !important;
+  border-radius: 8px !important;
+  padding: 1.25rem !important;
+  overflow-x: auto;
+  font-size: 0.875rem;
+  line-height: 1.7;
+}
+pre code {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  color: #cdd6f4;
+}
+:not(pre) > code {
+  background-color: #e8e8ed;
+  border-radius: 3px;
+  padding: 0.1em 0.4em;
+  font-size: 0.9em;
+  color: #1e1e2e;
+}
+
+/* === 文章正文 === */
+.prose pre {
+  background-color: #1e1e2e !important;
+}
+.prose :not(pre) > code {
+  background-color: #e8e8ed;
+  color: #1e1e2e;
+  padding: 0.15em 0.4em;
+  border-radius: 3px;
+  font-size: 0.875em;
+}
+.prose a {
+  color: #0066cc;
+  text-decoration: none;
+  font-weight: 500;
+}
+.prose a:hover {
+  text-decoration: underline;
+}
+
+/* === HTMX indicator === */
+.htmx-indicator { opacity: 0; transition: opacity 200ms ease-in; }
+.htmx-request .htmx-indicator,
+.htmx-indicator.htmx-request { opacity: 1; }
+
+/* === Welcome page === */
+.welcome-page {
+  min-height: 100vh;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.65) 0%, rgba(255,255,255,0.25) 50%, rgba(255,255,255,0.55) 100%),
+    url('/static/img/bg.jpg') center/cover no-repeat fixed;
+}
+.welcome-title {
+  margin: 0 0 1.5rem;
+  color: #000;
+  font-size: clamp(2.6rem, 5rem, 5.2rem);
+  font-weight: 900;
+}
+.btn-enter {
+  position: relative;
+  z-index: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 200px;
+  overflow: hidden;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  background: #fff;
+  color: #1a1a1a;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 12px 0;
+  text-decoration: none;
+  transition: color 0.3s ease, border-color 0.3s ease;
+}
+.btn-enter::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  left: -100%;
+  z-index: -1;
+  background: #0066cc;
+  transition: left 0.35s ease;
+}
+.btn-enter:hover {
+  border-color: #0066cc;
+  color: #fff;
+}
+.btn-enter:hover::before {
+  left: 0;
+}
+
+/* === Tool pages === */
+.mono,
+.code-editor textarea,
+.line-nums,
+.diff-table,
+.json-formatter-row {
+  font-family: SF Mono, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+.tool-panel,
+.json-panel {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+}
+.tool-panel-header {
+  flex-shrink: 0;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fafafa;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 10px 16px;
+}
+.code-editor {
+  display: flex;
+  min-height: 200px;
+  flex: 1;
+  overflow: hidden;
+}
+.line-nums {
+  width: 44px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-right: 1px solid #f0f0f0;
+  background: #fafafa;
+  color: #bbb;
+  font-size: 13px;
+  line-height: 1.625;
+  padding: 12px 8px 12px 12px;
+  text-align: right;
+  user-select: none;
+  white-space: pre;
+}
+.code-editor textarea {
+  flex: 1;
+  border: 0;
+  font-size: 13px;
+  line-height: 1.625;
+  outline: none;
+  padding: 12px 16px;
+  resize: none;
+  tab-size: 2;
+}
+.diff-editors {
+  display: flex;
+  gap: 12px;
+  min-height: 260px;
+  height: clamp(260px, 32vh, 420px);
+}
+.diff-result-scroll {
+  max-height: 58vh;
+}
+.diff-table {
+  table-layout: fixed;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.65;
+}
+.diff-table td {
+  padding: 0;
+  vertical-align: top;
+}
+.diff-table .gutter {
+  width: 48px;
+  border-right: 1px solid #f0f0f0;
+  background: #fafafa;
+  color: #bbb;
+  padding-left: 8px;
+  padding-right: 8px;
+  text-align: right;
+  user-select: none;
+}
+.diff-table .sign {
+  width: 24px;
+  font-weight: 600;
+  text-align: center;
+  user-select: none;
+}
+.diff-table .code {
+  padding-left: 12px;
+  padding-right: 12px;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.diff-table .diff-muted { background: #fafafa; }
+.diff-table .diff-added { background: #e6ffec; }
+.diff-table .diff-deleted { background: #ffebe9; }
+.diff-table .diff-empty { opacity: 0.45; }
+.diff-add-sign { color: #1a7f37; }
+.diff-del-sign { color: #cf222e; }
+.diff-stat-add { color: #1a7f37; }
+.diff-stat-del { color: #cf222e; }
+.diff-stat-same {
+  margin-left: 8px;
+  color: #6b7280;
+}
+.diff-inline-add,
+.diff-inline-del {
+  border-radius: 3px;
+  padding: 0 1px;
+}
+.diff-inline-add {
+  background: #abf2bc;
+}
+.diff-inline-del {
+  background: #ffc1bd;
+}
+.diff-ws {
+  border-radius: 2px;
+  color: #9ca3af;
+  background: rgba(156, 163, 175, 0.18);
+}
+.json-panels {
+  display: flex;
+  min-height: 500px;
+}
+.drag-handle {
+  width: 6px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.15s;
+}
+.drag-handle:hover,
+.drag-handle.active {
+  background: #0066cc;
+}
+.json-formatter-string { color: #2a7d2a; }
+.json-formatter-number { color: #b55c00; }
+.json-formatter-boolean { color: #7c3aed; }
+.json-formatter-null { color: #dc2626; }
+.json-formatter-key { color: #0066cc; }
+.json-formatter-constructor-name {
+  display: none;
+  color: #999;
+}
+.json-formatter-children.json-formatter-object::before {
+  content: '{';
+  display: block;
+  color: #bbb;
+}
+.json-formatter-children.json-formatter-object::after {
+  content: '}';
+  display: block;
+  color: #bbb;
+}
+.json-formatter-children.json-formatter-array::before {
+  content: '[';
+  display: block;
+  color: #bbb;
+}
+.json-formatter-children.json-formatter-array::after {
+  content: ']';
+  display: block;
+  color: #bbb;
+}
+.json-formatter-children.json-formatter-empty::before,
+.json-formatter-children.json-formatter-empty::after {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .diff-editors,
+  .json-panels {
+    flex-direction: column;
+    height: auto;
+  }
+  .drag-handle {
+    display: none;
+  }
+}

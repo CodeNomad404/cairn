@@ -1,0 +1,10 @@
+TRUNCATE TABLE comments RESTART IDENTITY;
+
+ALTER TABLE comments DROP CONSTRAINT IF EXISTS fk_comments_user;
+ALTER TABLE comments ALTER COLUMN user_id SET NOT NULL;
+ALTER TABLE comments
+    ADD CONSTRAINT fk_comments_user
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT;
+
+ALTER TABLE comments DROP COLUMN author;
+ALTER TABLE comments DROP COLUMN email;
