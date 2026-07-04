@@ -1,10 +1,3 @@
-function updateJSONLineNumbers(textarea, lineNumbers) {
-  var count = Math.max(textarea.value.split('\n').length, 1);
-  lineNumbers.textContent = Array.from({ length: count }, function (_, index) {
-    return index + 1;
-  }).join('\n');
-}
-
 function setJSONPreviewWaiting(preview, message) {
   preview.innerHTML = '<p class="mt-20 text-center text-gray-400">' + message + '</p>';
 }
@@ -33,6 +26,7 @@ document.addEventListener('DOMContentLoaded', function () {
   var left = document.getElementById('json-panel-left');
   var right = document.getElementById('json-panel-right');
   var panels = document.getElementById('json-panels');
+  var lineNumberController = window.CairnLineNumbers.bind(textarea, lineNumbers);
   var debounceTimer;
   var dragging = false;
   var startX = 0;
@@ -49,13 +43,12 @@ document.addEventListener('DOMContentLoaded', function () {
     try {
       var parsed = JSON.parse(input);
       preview.innerHTML = '';
-      var formatter = new JSONFormatter(parsed, 2, {
+      var formatter = new JSONFormatter(parsed, Infinity, {
         hoverPreviewEnabled: false,
         animateOpen: true,
         animateClose: true,
       });
       preview.appendChild(formatter.render());
-      formatter.openAtDepth(3);
       decorateJSONPreview(preview);
       error.classList.add('hidden');
     } catch (err) {
@@ -69,7 +62,7 @@ document.addEventListener('DOMContentLoaded', function () {
     textarea.value = '';
     setJSONPreviewWaiting(preview, '粘贴 JSON 后点击格式化');
     error.classList.add('hidden');
-    updateJSONLineNumbers(textarea, lineNumbers);
+    lineNumberController.update();
   }
 
   function formattedInput() {
@@ -112,12 +105,8 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   textarea.addEventListener('input', function () {
-    updateJSONLineNumbers(textarea, lineNumbers);
     window.clearTimeout(debounceTimer);
     debounceTimer = window.setTimeout(formatJSON, 500);
-  });
-  textarea.addEventListener('scroll', function () {
-    lineNumbers.scrollTop = textarea.scrollTop;
   });
 
   document.querySelector('[data-json-format]').addEventListener('click', formatJSON);
@@ -154,5 +143,4 @@ document.addEventListener('DOMContentLoaded', function () {
     document.body.style.userSelect = '';
   });
 
-  updateJSONLineNumbers(textarea, lineNumbers);
 });

@@ -242,18 +242,10 @@
   }
 
   function syncLineNumbers(textarea, numsEl) {
-    function update() {
-      var count = Math.max(splitLines(textarea.value).length, 1);
-      numsEl.textContent = Array.from({ length: count }, function (_, index) {
-        return index + 1;
-      }).join('\n');
+    if (!window.CairnLineNumbers) {
+      throw new Error('CairnLineNumbers is required before diff.js');
     }
-
-    textarea.addEventListener('input', update);
-    textarea.addEventListener('scroll', function () {
-      numsEl.scrollTop = textarea.scrollTop;
-    });
-    update();
+    window.CairnLineNumbers.bind(textarea, numsEl);
   }
 
   function bindDOM() {

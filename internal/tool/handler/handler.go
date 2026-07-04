@@ -48,14 +48,14 @@ func (h *Handler) index(w http.ResponseWriter, r *http.Request) {
 // diffPage 文本对比工具页面
 func (h *Handler) diffPage(w http.ResponseWriter, r *http.Request) {
 	h.r.Render(w, "diff-tool", struct{ web.PageData }{
-		PageData: h.toolData(r, "文本对比 — Cairn", "/static/js/vendor/difflib.js", "/static/js/tools/diff.js"),
+		PageData: h.toolData(r, "文本对比 — Cairn", "/static/js/vendor/difflib.js", "/static/js/tools/line-numbers.js", "/static/js/tools/diff.js"),
 	})
 }
 
 // jsonPage JSON 格式化工具页面
 func (h *Handler) jsonPage(w http.ResponseWriter, r *http.Request) {
 	h.r.Render(w, "json-tool", struct{ web.PageData }{
-		PageData: h.toolData(r, "JSON 格式化 — Cairn", "/static/js/vendor/json-formatter.js", "/static/js/tools/json.js"),
+		PageData: h.toolData(r, "JSON 格式化 — Cairn", "/static/js/vendor/json-formatter.js", "/static/js/tools/line-numbers.js", "/static/js/tools/json.js"),
 	})
 }
 

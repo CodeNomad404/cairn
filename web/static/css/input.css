@@ -142,6 +142,7 @@ pre code {
   padding: 10px 16px;
 }
 .code-editor {
+  position: relative;
   display: flex;
   min-height: 200px;
   flex: 1;
@@ -151,25 +152,33 @@ pre code {
   width: 44px;
   flex-shrink: 0;
   overflow: hidden;
+  margin: 0;
   border-right: 1px solid #f0f0f0;
   background: #fafafa;
   color: #bbb;
   font-size: 13px;
-  line-height: 1.625;
+  line-height: 21px;
   padding: 12px 8px 12px 12px;
   text-align: right;
   user-select: none;
-  white-space: pre;
+  white-space: normal;
+}
+.line-nums > span {
+  display: block;
+  line-height: 21px;
 }
 .code-editor textarea {
   flex: 1;
+  overflow-x: hidden;
   border: 0;
   font-size: 13px;
-  line-height: 1.625;
+  line-height: 21px;
   outline: none;
   padding: 12px 16px;
   resize: none;
   tab-size: 2;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
 }
 .diff-editors {
   display: flex;
@@ -263,6 +272,42 @@ pre code {
 .json-formatter-boolean { color: #7c3aed; }
 .json-formatter-null { color: #dc2626; }
 .json-formatter-key { color: #0066cc; }
+.json-panel .json-formatter-row .json-formatter-toggler-link {
+  display: inline-flex;
+  align-items: center;
+}
+.json-panel .json-formatter-row .json-formatter-toggler {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  margin-right: 4px;
+  border-radius: 5px;
+  color: #6b7280;
+  background: #f3f4f6;
+  font-size: 0;
+  line-height: 1;
+  opacity: 1;
+  padding: 0;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+.json-panel .json-formatter-row .json-formatter-toggler-link:hover .json-formatter-toggler {
+  color: #0066cc;
+  background: #e8f2ff;
+}
+.json-panel .json-formatter-row .json-formatter-toggler::after {
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  content: '';
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+}
+.json-panel .json-formatter-row.json-formatter-open > .json-formatter-toggler-link .json-formatter-toggler::after {
+  transform: rotate(45deg);
+}
 .json-formatter-constructor-name {
   display: none;
   color: #999;
