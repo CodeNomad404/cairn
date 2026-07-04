@@ -69,11 +69,11 @@ ignored by Git:
 cp deploy/deploy.env.example deploy/deploy.env
 ```
 
-Edit `DEPLOY_HOST`, `GITEE_REPO_SSH`, and `GITEE_REPO_HTTPS` in the copied
-configuration. Set `DEPLOY_SSH_KEY` for passwordless server login and
-`GITEE_SSH_KEY` when the local Gitee push uses a non-default SSH key. The example
-intentionally contains no real server address, repository, private key, or
-password. The shared deployment script normally needs no local edits.
+Edit `DEPLOY_HOST` and `GITEE_REPO_URL` in the copied configuration. Set
+`DEPLOY_SSH_KEY` for passwordless server login and `REMOTE_GIT_SSH_KEY` to the
+Gitee deployment key on the server. The example intentionally contains no real
+server address, repository, private key, or password. The shared deployment
+script normally needs no local edits.
 
 Install the deployment public key on the server once (this command asks for the
 server password):
@@ -84,6 +84,15 @@ ssh-copy-id -i ~/.ssh/id_ed25519_cairn.pub ubuntu@YOUR_SERVER_IP
 
 After that, daily deployments do not need the server password.
 
+For a private Gitee repository, create a separate key on the server and add its
+public key to Gitee:
+
+```bash
+ssh-keygen -t ed25519 -C "cairn-server-deploy" \
+  -f ~/.ssh/id_ed25519_gitee
+cat ~/.ssh/id_ed25519_gitee.pub
+```
+
 Then run it from the repository root:
 
 ```bash
@@ -91,14 +100,13 @@ Then run it from the repository root:
 # or: task deploy
 ```
 
-It refuses to run with uncommitted changes, switches to `main`, and pushes
-`main` to Gitee. The server then clones or updates its source cache at
-`/opt/cairn-repo` from Gitee, downloads
-dependencies, tests, builds, backs up PostgreSQL, runs forward migrations,
-installs the new binary, restarts the service, and checks `/healthz`. No source
-files are uploaded from the local machine. If the health check fails, it restores
-the previous binary. Applied database migrations are deliberately not rolled
-back.
+The script does not inspect, commit, or push the local Git repository. It only
+connects to the server. The server clones or updates `main` in its source cache
+at `/opt/cairn-repo`, downloads dependencies, tests, builds, backs up PostgreSQL,
+runs forward migrations, installs the new binary, restarts the service, and
+checks `/healthz`. No source files are uploaded from the local machine. If the
+health check fails, it restores the previous binary. Applied database migrations
+are deliberately not rolled back.
 
 Use another configuration file when needed:
 

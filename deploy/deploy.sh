@@ -13,8 +13,7 @@ source "${CONFIG_FILE}"
 set +a
 
 : "${DEPLOY_HOST:?DEPLOY_HOST is required in ${CONFIG_FILE}}"
-: "${GITEE_REPO_SSH:?GITEE_REPO_SSH is required in ${CONFIG_FILE}}"
-: "${GITEE_REPO_HTTPS:?GITEE_REPO_HTTPS is required in ${CONFIG_FILE}}"
+: "${GITEE_REPO_URL:?GITEE_REPO_URL is required in ${CONFIG_FILE}}"
 
 readonly DEPLOY_HOST
 readonly DEPLOY_PORT="${DEPLOY_PORT:-22}"
@@ -22,9 +21,8 @@ readonly DEPLOY_USER="${DEPLOY_USER:-ubuntu}"
 readonly DEPLOY_SSH_KEY="${DEPLOY_SSH_KEY:-}"
 readonly REMOTE_APP_DIR="${REMOTE_APP_DIR:-/opt/cairn}"
 readonly REMOTE_REPO_DIR="${REMOTE_REPO_DIR:-/opt/cairn-repo}"
-readonly GITEE_REPO_SSH
-readonly GITEE_REPO_HTTPS
-readonly GITEE_SSH_KEY="${GITEE_SSH_KEY:-}"
+readonly REMOTE_GIT_SSH_KEY="${REMOTE_GIT_SSH_KEY:-}"
+readonly GITEE_REPO_URL
 readonly SSH_TARGET="${DEPLOY_USER}@${DEPLOY_HOST}"
 
 log() {
@@ -38,33 +36,7 @@ require_command() {
   }
 }
 
-require_command git
 require_command ssh
-
-if [[ ! -f go.mod || ! -d cmd/server ]]; then
-  printf 'run this script from the Cairn repository root\n' >&2
-  exit 1
-fi
-if [[ -n "$(git status --short)" ]]; then
-  printf 'working tree is not clean; commit or stash local changes before deploying\n' >&2
-  exit 1
-fi
-
-log "Switching to local main branch"
-git switch main
-
-if git remote get-url gitee >/dev/null 2>&1; then
-  git remote set-url gitee "${GITEE_REPO_SSH}"
-else
-  git remote add gitee "${GITEE_REPO_SSH}"
-fi
-
-log "Pushing main branch to Gitee"
-if [[ -n "${GITEE_SSH_KEY}" ]]; then
-  GIT_SSH_COMMAND="ssh -i ${GITEE_SSH_KEY} -o IdentitiesOnly=yes" git push gitee main
-else
-  git push gitee main
-fi
 
 release_id="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 ssh_control_path="/tmp/cairn-ssh-${USER:-user}-$$"
@@ -87,14 +59,14 @@ log "Connecting to ${SSH_TARGET}:${DEPLOY_PORT}"
 ssh_connected=true
 
 log "Pulling from Gitee and deploying on the server"
-"${ssh[@]}" "REMOTE_APP_DIR='${REMOTE_APP_DIR}' REMOTE_REPO_DIR='${REMOTE_REPO_DIR}' GITEE_REPO_HTTPS='${GITEE_REPO_HTTPS}' RELEASE_ID='${release_id}' bash -s" <<'REMOTE_SCRIPT'
+"${ssh[@]}" "REMOTE_APP_DIR='${REMOTE_APP_DIR}' REMOTE_REPO_DIR='${REMOTE_REPO_DIR}' REMOTE_GIT_SSH_KEY='${REMOTE_GIT_SSH_KEY}' GITEE_REPO_URL='${GITEE_REPO_URL}' RELEASE_ID='${release_id}' bash -s" <<'REMOTE_SCRIPT'
 set -Eeuo pipefail
 
 export PATH="/usr/local/go/bin:${HOME}/go/bin:${PATH}"
 
 : "${REMOTE_APP_DIR:?}"
 : "${REMOTE_REPO_DIR:?}"
-: "${GITEE_REPO_HTTPS:?}"
+: "${GITEE_REPO_URL:?}"
 : "${RELEASE_ID:?}"
 
 readonly env_file=/etc/cairn/cairn.env
@@ -137,19 +109,23 @@ sudo test -r "${env_file}" || {
   exit 1
 }
 
+if [[ -n "${REMOTE_GIT_SSH_KEY}" ]]; then
+  export GIT_SSH_COMMAND="ssh -i ${REMOTE_GIT_SSH_KEY} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+fi
+
 if [[ -d "${REMOTE_REPO_DIR}/.git" ]]; then
-  sudo -u cairn git -C "${REMOTE_REPO_DIR}" remote set-url origin "${GITEE_REPO_HTTPS}"
-  sudo -u cairn git -C "${REMOTE_REPO_DIR}" fetch --prune origin main
-  sudo -u cairn git -C "${REMOTE_REPO_DIR}" checkout -B main origin/main
+  git -C "${REMOTE_REPO_DIR}" remote set-url origin "${GITEE_REPO_URL}"
+  git -C "${REMOTE_REPO_DIR}" fetch --prune origin main
+  git -C "${REMOTE_REPO_DIR}" checkout -B main origin/main
 else
-  if [[ -e "${REMOTE_REPO_DIR}" ]]; then
+  if [[ -e "${REMOTE_REPO_DIR}" && -n "$(ls -A "${REMOTE_REPO_DIR}")" ]]; then
     printf 'server repository path exists but is not a Git repository: %s\n' "${REMOTE_REPO_DIR}" >&2
     exit 1
   fi
   sudo mkdir -p "${REMOTE_REPO_DIR}"
-  sudo chown cairn:cairn "${REMOTE_REPO_DIR}"
-  sudo -u cairn git clone --branch main --single-branch \
-    "${GITEE_REPO_HTTPS}" "${REMOTE_REPO_DIR}"
+  sudo chown "$(id -un):$(id -gn)" "${REMOTE_REPO_DIR}"
+  git clone --branch main --single-branch \
+    "${GITEE_REPO_URL}" "${REMOTE_REPO_DIR}"
 fi
 
 cd "${REMOTE_REPO_DIR}"
