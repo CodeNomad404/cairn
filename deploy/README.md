@@ -70,9 +70,19 @@ cp deploy/deploy.env.example deploy/deploy.env
 ```
 
 Edit `DEPLOY_HOST`, `GITEE_REPO_SSH`, and `GITEE_REPO_HTTPS` in the copied
-configuration. Set `GITEE_SSH_KEY` when the local Gitee push uses a non-default
-SSH key. The example intentionally contains no real server address, repository,
-or password. The shared deployment script normally needs no local edits.
+configuration. Set `DEPLOY_SSH_KEY` for passwordless server login and
+`GITEE_SSH_KEY` when the local Gitee push uses a non-default SSH key. The example
+intentionally contains no real server address, repository, private key, or
+password. The shared deployment script normally needs no local edits.
+
+Install the deployment public key on the server once (this command asks for the
+server password):
+
+```bash
+ssh-copy-id -i ~/.ssh/id_ed25519_cairn.pub ubuntu@YOUR_SERVER_IP
+```
+
+After that, daily deployments do not need the server password.
 
 Then run it from the repository root:
 

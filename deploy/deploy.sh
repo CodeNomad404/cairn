@@ -19,6 +19,7 @@ set +a
 readonly DEPLOY_HOST
 readonly DEPLOY_PORT="${DEPLOY_PORT:-22}"
 readonly DEPLOY_USER="${DEPLOY_USER:-ubuntu}"
+readonly DEPLOY_SSH_KEY="${DEPLOY_SSH_KEY:-}"
 readonly REMOTE_APP_DIR="${REMOTE_APP_DIR:-/opt/cairn}"
 readonly REMOTE_REPO_DIR="${REMOTE_REPO_DIR:-/opt/cairn-repo}"
 readonly GITEE_REPO_SSH
@@ -68,6 +69,9 @@ fi
 release_id="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 ssh_control_path="/tmp/cairn-ssh-${USER:-user}-$$"
 ssh_options=(-p "${DEPLOY_PORT}" -o ControlMaster=auto -o ControlPersist=60 -S "${ssh_control_path}")
+if [[ -n "${DEPLOY_SSH_KEY}" ]]; then
+  ssh_options+=(-i "${DEPLOY_SSH_KEY}" -o IdentitiesOnly=yes)
+fi
 ssh=(ssh "${ssh_options[@]}" "${SSH_TARGET}")
 ssh_connected=false
 
