@@ -88,6 +88,8 @@ log "Building and deploying on the server"
 "${ssh[@]}" "REMOTE_STAGE='${remote_stage}' REMOTE_APP_DIR='${REMOTE_APP_DIR}' RELEASE_ID='${release_id}' bash -s" <<'REMOTE_SCRIPT'
 set -Eeuo pipefail
 
+export PATH="/usr/local/go/bin:${HOME}/go/bin:${PATH}"
+
 : "${REMOTE_STAGE:?}"
 : "${REMOTE_APP_DIR:?}"
 : "${RELEASE_ID:?}"
