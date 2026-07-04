@@ -62,16 +62,17 @@ sudo systemctl restart cairn
 
 ## Daily deployment
 
-Create the local deployment script once. The real script is ignored by Git:
+Create the local deployment configuration once. The real configuration is
+ignored by Git:
 
 ```bash
-cp deploy/deploy.sh.example deploy/deploy.sh
-chmod +x deploy/deploy.sh
+cp deploy/deploy.env.example deploy/deploy.env
 ```
 
-Edit `DEPLOY_HOST` in the copied script, or provide the server settings as
-environment variables when deploying. The example intentionally contains no
-real server address or password.
+Edit `DEPLOY_HOST`, `GITEE_REPO_SSH`, and `GITEE_REPO_HTTPS` in the copied
+configuration. Set `GITEE_SSH_KEY` when the local Gitee push uses a non-default
+SSH key. The example intentionally contains no real server address, repository,
+or password. The shared deployment script normally needs no local edits.
 
 Then run it from the repository root:
 
@@ -80,18 +81,19 @@ Then run it from the repository root:
 # or: task deploy
 ```
 
-It refuses to run with uncommitted changes, switches to `main`, fast-forward
-pulls the latest code from `origin`, downloads dependencies, tests locally,
-uploads a source whitelist to a temporary server directory, downloads server
-dependencies, builds, backs up PostgreSQL, runs forward migrations, atomically
-installs the new binary, restarts the service, and checks `/healthz`. If the
-health check fails, it restores the previous binary. Applied database migrations
-are deliberately not rolled back.
+It refuses to run with uncommitted changes, switches to `main`, and pushes
+`main` to Gitee. The server then clones or updates its source cache at
+`/opt/cairn-repo` from Gitee, downloads
+dependencies, tests, builds, backs up PostgreSQL, runs forward migrations,
+installs the new binary, restarts the service, and checks `/healthz`. No source
+files are uploaded from the local machine. If the health check fails, it restores
+the previous binary. Applied database migrations are deliberately not rolled
+back.
 
-For example:
+Use another configuration file when needed:
 
 ```bash
-DEPLOY_USER=ubuntu DEPLOY_HOST=203.0.113.10 DEPLOY_PORT=22 ./deploy/deploy.sh
+DEPLOY_CONFIG=/path/to/deploy.env ./deploy/deploy.sh
 ```
 
 The script never stores an SSH password. SSH will prompt for one unless key-based
