@@ -59,3 +59,41 @@ migrate -path migrations \
   -database "postgres://cairn:${DB_PASSWORD}@127.0.0.1:5432/cairn?sslmode=disable" up
 sudo systemctl restart cairn
 ```
+
+## Daily deployment
+
+Create the local deployment script once. The real script is ignored by Git:
+
+```bash
+cp deploy/deploy.sh.example deploy/deploy.sh
+chmod +x deploy/deploy.sh
+```
+
+Edit `DEPLOY_HOST` in the copied script, or provide the server settings as
+environment variables when deploying. The example intentionally contains no
+real server address or password.
+
+Then run it from the repository root:
+
+```bash
+./deploy/deploy.sh
+# or: task deploy
+```
+
+It refuses to run with uncommitted changes, switches to `main`, fast-forward
+pulls the latest code from `origin`, downloads dependencies, tests locally,
+uploads a source whitelist to a temporary server directory, downloads server
+dependencies, builds, backs up PostgreSQL, runs forward migrations, atomically
+installs the new binary, restarts the service, and checks `/healthz`. If the
+health check fails, it restores the previous binary. Applied database migrations
+are deliberately not rolled back.
+
+For example:
+
+```bash
+DEPLOY_USER=ubuntu DEPLOY_HOST=203.0.113.10 DEPLOY_PORT=22 ./deploy/deploy.sh
+```
+
+The script never stores an SSH password. SSH will prompt for one unless key-based
+authentication is configured. The SSH user must be allowed to run the deployment
+`sudo` commands.

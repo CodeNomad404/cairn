@@ -4,6 +4,7 @@ server
 
 # Environment
 .env
+deploy/deploy.sh
 
 # IDE
 .idea/

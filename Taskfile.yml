@@ -11,6 +11,11 @@ tasks:
     cmds:
       - go build -o bin/cairn ./cmd/server
 
+  deploy:
+    desc: Pull and deploy the latest main branch to production
+    cmds:
+      - ./deploy/deploy.sh
+
   lint:
     desc: Run linter
     cmds:
