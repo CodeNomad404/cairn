@@ -23,6 +23,7 @@ readonly REMOTE_APP_DIR="${REMOTE_APP_DIR:-/opt/cairn}"
 readonly REMOTE_REPO_DIR="${REMOTE_REPO_DIR:-/opt/cairn-repo}"
 readonly REMOTE_GIT_SSH_KEY="${REMOTE_GIT_SSH_KEY:-}"
 readonly GITEE_REPO_URL
+readonly GO_PROXY="${GO_PROXY:-https://goproxy.cn,direct}"
 readonly SSH_TARGET="${DEPLOY_USER}@${DEPLOY_HOST}"
 
 log() {
@@ -59,7 +60,7 @@ log "Connecting to ${SSH_TARGET}:${DEPLOY_PORT}"
 ssh_connected=true
 
 log "Pulling from Gitee and deploying on the server"
-"${ssh[@]}" "REMOTE_APP_DIR='${REMOTE_APP_DIR}' REMOTE_REPO_DIR='${REMOTE_REPO_DIR}' REMOTE_GIT_SSH_KEY='${REMOTE_GIT_SSH_KEY}' GITEE_REPO_URL='${GITEE_REPO_URL}' RELEASE_ID='${release_id}' bash -s" <<'REMOTE_SCRIPT'
+"${ssh[@]}" "REMOTE_APP_DIR='${REMOTE_APP_DIR}' REMOTE_REPO_DIR='${REMOTE_REPO_DIR}' REMOTE_GIT_SSH_KEY='${REMOTE_GIT_SSH_KEY}' GITEE_REPO_URL='${GITEE_REPO_URL}' GOPROXY='${GO_PROXY}' RELEASE_ID='${release_id}' bash -s" <<'REMOTE_SCRIPT'
 set -Eeuo pipefail
 
 export PATH="/usr/local/go/bin:${HOME}/go/bin:${PATH}"
@@ -67,7 +68,10 @@ export PATH="/usr/local/go/bin:${HOME}/go/bin:${PATH}"
 : "${REMOTE_APP_DIR:?}"
 : "${REMOTE_REPO_DIR:?}"
 : "${GITEE_REPO_URL:?}"
+: "${GOPROXY:?}"
 : "${RELEASE_ID:?}"
+
+export GOPROXY
 
 readonly env_file=/etc/cairn/cairn.env
 readonly service=cairn

@@ -71,9 +71,10 @@ cp deploy/deploy.env.example deploy/deploy.env
 
 Edit `DEPLOY_HOST` and `GITEE_REPO_URL` in the copied configuration. Set
 `DEPLOY_SSH_KEY` for passwordless server login and `REMOTE_GIT_SSH_KEY` to the
-Gitee deployment key on the server. The example intentionally contains no real
-server address, repository, private key, or password. The shared deployment
-script normally needs no local edits.
+Gitee deployment key on the server. `GO_PROXY` controls the Go module proxy used
+during the remote build and defaults to `https://goproxy.cn,direct`. The example
+intentionally contains no real server address, repository, private key, or
+password. The shared deployment script normally needs no local edits.
 
 Install the deployment public key on the server once (this command asks for the
 server password):
