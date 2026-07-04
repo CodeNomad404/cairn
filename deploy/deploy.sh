@@ -108,6 +108,7 @@ for command_name in git go migrate rsync curl python3; do
     exit 1
   }
 done
+readonly migrate_bin="$(command -v migrate)"
 sudo test -r "${env_file}" || {
   printf 'cannot read production environment file: %s\n' "${env_file}" >&2
   exit 1
@@ -146,9 +147,9 @@ sudo bash -c '
   set +a
   : "${DB_PASSWORD:?DB_PASSWORD is required}"
   encoded_password="$(python3 -c '\''import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))'\'' "${DB_PASSWORD}")"
-  migrate -path "$2" \
+  "$3" -path "$2" \
     -database "postgres://cairn:${encoded_password}@127.0.0.1:5432/cairn?sslmode=disable" up
-' _ "${env_file}" "${REMOTE_REPO_DIR}/migrations"
+' _ "${env_file}" "${REMOTE_REPO_DIR}/migrations" "${migrate_bin}"
 
 sudo mkdir -p "${REMOTE_APP_DIR}/bin"
 if [[ -f "${current_binary}" ]]; then
