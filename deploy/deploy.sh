@@ -91,7 +91,7 @@ rollback() {
     printf '\nDeployment failed; restoring the previous binary...\n' >&2
     sudo install -o cairn -g cairn -m 0755 "${old_binary}" "${current_binary}"
     sudo systemctl restart "${service}"
-    if curl --fail --silent --show-error --retry 5 --retry-delay 2 \
+    if curl --fail --silent --show-error --retry 10 --retry-delay 1 --retry-connrefused \
       http://127.0.0.1:8080/healthz >/dev/null; then
       printf 'Rollback succeeded. Database migrations were not reverted.\n' >&2
     else
@@ -170,7 +170,7 @@ rm -f "${new_binary}"
 binary_replaced=true
 sudo systemctl restart "${service}"
 
-curl --fail --silent --show-error --retry 10 --retry-delay 2 \
+curl --fail --silent --show-error --retry 15 --retry-delay 1 --retry-connrefused \
   http://127.0.0.1:8080/healthz >/dev/null
 sudo systemctl is-active --quiet "${service}"
 
