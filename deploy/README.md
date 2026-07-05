@@ -118,3 +118,12 @@ DEPLOY_CONFIG=/path/to/deploy.env ./deploy/deploy.sh
 The script never stores an SSH password. SSH will prompt for one unless key-based
 authentication is configured. The SSH user must be allowed to run the deployment
 `sudo` commands.
+
+When `deploy/Caddyfile` changes, validate and install it separately before
+reloading Caddy:
+
+```bash
+sudo caddy validate --config /opt/cairn/deploy/Caddyfile
+sudo install -o root -g root -m 0644 /opt/cairn/deploy/Caddyfile /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+```

@@ -33,7 +33,7 @@ func (r *PostRepository) Create(ctx context.Context, p *blog.Post) error {
 func (r *PostRepository) GetBySlug(ctx context.Context, slug string) (*blog.Post, error) {
 	sql := `SELECT id, slug, title, content_md, content_html, status,
 	               created_at, updated_at, published_at
-	        FROM posts WHERE slug = $1`
+	        FROM posts WHERE slug = $1 AND status = 'published'`
 
 	p := &blog.Post{}
 	var pubAt *time.Time
@@ -72,6 +72,26 @@ func (r *PostRepository) ListPublished(ctx context.Context, limit, offset int) (
 		}
 		p.PublishedAt = pubAt
 		posts = append(posts, p)
+	}
+	return posts, rows.Err()
+}
+
+// ListPublishedMetadata 返回 Sitemap 所需的最小文章元数据。
+func (r *PostRepository) ListPublishedMetadata(ctx context.Context) ([]blog.Post, error) {
+	rows, err := r.db.Query(ctx, `SELECT slug, updated_at
+		FROM posts WHERE status = 'published' ORDER BY updated_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var posts []blog.Post
+	for rows.Next() {
+		var post blog.Post
+		if err := rows.Scan(&post.Slug, &post.UpdatedAt); err != nil {
+			return nil, err
+		}
+		posts = append(posts, post)
 	}
 	return posts, rows.Err()
 }

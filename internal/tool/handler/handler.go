@@ -29,33 +29,32 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Get("/tools/diff", h.diffPage)
 }
 
-func (h *Handler) toolData(r *http.Request, title string, scripts ...string) web.PageData {
-	return web.PageData{
-		Title:   title,
-		Active:  "tools",
-		User:    authmid.GetUser(r.Context()),
-		Scripts: scripts,
-	}
+func (h *Handler) toolData(r *http.Request, title, description, path string, scripts ...string) web.PageData {
+	data := web.PublicPageData(title, description, path)
+	data.Active = "tools"
+	data.User = authmid.GetUser(r.Context())
+	data.Scripts = scripts
+	return data
 }
 
 // index 工具首页
 func (h *Handler) index(w http.ResponseWriter, r *http.Request) {
 	h.r.Render(w, "tools", struct{ web.PageData }{
-		PageData: h.toolData(r, "工具 — Cairn"),
+		PageData: h.toolData(r, "在线开发工具 — Cairn", "免费在线开发工具，提供 JSON 格式化、JSON 校验和文本对比功能，数据仅在浏览器本地处理，安全便捷。", "/tools"),
 	})
 }
 
 // diffPage 文本对比工具页面
 func (h *Handler) diffPage(w http.ResponseWriter, r *http.Request) {
 	h.r.Render(w, "diff-tool", struct{ web.PageData }{
-		PageData: h.toolData(r, "文本对比 — Cairn", "/static/js/vendor/difflib.js", "/static/js/tools/line-numbers.js", "/static/js/tools/diff.js"),
+		PageData: h.toolData(r, "在线文本对比工具 — Cairn", "在线文本对比工具，支持并排查看两段文本差异，高亮新增、删除和行内变化，适合代码、文档和配置对比。", "/tools/diff", "/static/js/vendor/difflib.js", "/static/js/tools/line-numbers.js", "/static/js/tools/diff.js"),
 	})
 }
 
 // jsonPage JSON 格式化工具页面
 func (h *Handler) jsonPage(w http.ResponseWriter, r *http.Request) {
 	h.r.Render(w, "json-tool", struct{ web.PageData }{
-		PageData: h.toolData(r, "JSON 格式化 — Cairn", "/static/js/vendor/json-formatter.js", "/static/js/tools/line-numbers.js", "/static/js/tools/json.js"),
+		PageData: h.toolData(r, "在线 JSON 格式化工具 — Cairn", "在线 JSON 格式化、校验与树形查看工具，支持复制、导出和结构化展示，适合调试接口数据与配置文件。", "/tools/json", "/static/js/vendor/json-formatter.js", "/static/js/tools/line-numbers.js", "/static/js/tools/json.js"),
 	})
 }
 

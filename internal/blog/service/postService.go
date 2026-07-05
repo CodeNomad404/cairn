@@ -83,3 +83,7 @@ func (s *PostService) GetBySlug(ctx context.Context, slug string) (*blog.Post, e
 func (s *PostService) ListPublished(ctx context.Context, limit, offset int) ([]blog.Post, error) {
 	return s.repo.ListPublished(ctx, limit, offset)
 }
+
+func (s *PostService) ListPublishedMetadata(ctx context.Context) ([]blog.Post, error) {
+	return s.repo.ListPublishedMetadata(ctx)
+}

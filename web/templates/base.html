@@ -5,6 +5,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{.Title}}</title>
+  {{if .Description}}<meta name="description" content="{{.Description}}">{{end}}
+  {{if .Robots}}<meta name="robots" content="{{.Robots}}">{{end}}
+  {{if .Canonical}}<link rel="canonical" href="{{.Canonical}}">{{end}}
+  {{if .Canonical}}<meta property="og:url" content="{{.Canonical}}">{{end}}
+  <meta property="og:title" content="{{.Title}}">
+  {{if .Description}}<meta property="og:description" content="{{.Description}}">{{end}}
+  <meta property="og:type" content="{{if .OpenGraphType}}{{.OpenGraphType}}{{else}}website{{end}}">
+  <meta property="og:site_name" content="Cairn">
   <link rel="stylesheet" href="/static/css/output.css">
   {{range .Scripts}}
   <script src="{{.}}" defer></script>

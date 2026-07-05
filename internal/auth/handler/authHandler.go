@@ -28,7 +28,7 @@ type authPage struct {
 // LoginPage 登录页面 GET
 func (h *AuthHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
 	h.r.Render(w, "login", authPage{
-		PageData: web.PageData{Title: "登录 — Cairn"},
+		PageData: web.PrivatePageData("登录 — Cairn"),
 	})
 }
 
@@ -40,7 +40,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	token, _, err := h.svc.Login(r.Context(), username, password)
 	if err != nil {
 		h.r.RenderStatus(w, http.StatusUnprocessableEntity, "login", authPage{
-			PageData: web.PageData{Title: "登录 — Cairn"},
+			PageData: web.PrivatePageData("登录 — Cairn"),
 			Error:    err.Error(),
 		})
 		return
@@ -53,7 +53,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 // RegisterPage 注册页面 GET
 func (h *AuthHandler) RegisterPage(w http.ResponseWriter, r *http.Request) {
 	h.r.Render(w, "register", authPage{
-		PageData: web.PageData{Title: "注册 — Cairn"},
+		PageData: web.PrivatePageData("注册 — Cairn"),
 	})
 }
 
@@ -65,7 +65,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	_, err := h.svc.Register(r.Context(), username, password)
 	if err != nil {
 		h.r.RenderStatus(w, http.StatusUnprocessableEntity, "register", authPage{
-			PageData: web.PageData{Title: "注册 — Cairn"},
+			PageData: web.PrivatePageData("注册 — Cairn"),
 			Error:    err.Error(),
 		})
 		return

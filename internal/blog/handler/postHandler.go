@@ -2,14 +2,18 @@ package handler
 
 import (
 	"fmt"
+	"html"
 	"html/template"
 	"io"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/microcosm-cc/bluemonday"
 
+	"cairn.cn/internal/auth"
 	authmid "cairn.cn/internal/auth/middleware"
 	"cairn.cn/internal/blog"
 	"cairn.cn/internal/blog/service"
@@ -66,10 +70,11 @@ func (h *PostHandler) RegisterRoutes(r chi.Router) {
 // home 欢迎页
 func (h *PostHandler) home(w http.ResponseWriter, r *http.Request) {
 	h.r.Render(w, "home", homePage{
-		PageData: web.PageData{
-			Title:     "Cairn · 石堆碑",
-			BodyClass: "welcome-page flex flex-col",
-		},
+		PageData: func() web.PageData {
+			data := web.PublicPageData("Cairn · 石堆碑", "Cairn 技术博客，记录 Go、Web 开发、PostgreSQL、服务端渲染与个人网站建设实践，并提供实用在线工具。", "/")
+			data.BodyClass = "welcome-page flex flex-col"
+			return data
+		}(),
 	})
 }
 
@@ -82,11 +87,12 @@ func (h *PostHandler) list(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.r.Render(w, "index", postListPage{
-		PageData: web.PageData{
-			Title:  "博客 — Cairn",
-			Active: "blog",
-			User:   authmid.GetUser(r.Context()),
-		},
+		PageData: func() web.PageData {
+			data := web.PublicPageData("技术博客 — Cairn", "Cairn 技术博客专注 Go、PostgreSQL、服务端渲染和网站工程实践，分享个人项目开发中的经验、问题与总结。", "/posts")
+			data.Active = "blog"
+			data.User = authmid.GetUser(r.Context())
+			return data
+		}(),
 		Posts: posts,
 	})
 }
@@ -100,12 +106,13 @@ func (h *PostHandler) uploadPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.r.Render(w, "upload", uploadPage{
-		PageData: web.PageData{
-			Title:   "上传文章 — Cairn",
-			Active:  "blog",
-			User:    user,
-			Scripts: []string{"/static/js/admin/upload.js"},
-		},
+		PageData: func() web.PageData {
+			data := web.PrivatePageData("上传文章 — Cairn")
+			data.Active = "blog"
+			data.User = user
+			data.Scripts = []string{"/static/js/admin/upload.js"}
+			return data
+		}(),
 	})
 }
 
@@ -157,27 +164,17 @@ func (h *PostHandler) upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.r.Render(w, "upload", uploadPage{
-		PageData: web.PageData{
-			Title:   "上传文章 — Cairn",
-			Active:  "blog",
-			User:    authmid.GetUser(r.Context()),
-			Scripts: []string{"/static/js/admin/upload.js"},
-		},
-		Success: true,
-		Slug:    post.Slug,
+		PageData: uploadPageData(authmid.GetUser(r.Context())),
+		Success:  true,
+		Slug:     post.Slug,
 	})
 }
 
 // renderUploadError 渲染带错误信息的上传页面
 func (h *PostHandler) renderUploadError(w http.ResponseWriter, r *http.Request, msg string) {
 	h.r.RenderStatus(w, http.StatusUnprocessableEntity, "upload", uploadPage{
-		PageData: web.PageData{
-			Title:   "上传文章 — Cairn",
-			Active:  "blog",
-			User:    authmid.GetUser(r.Context()),
-			Scripts: []string{"/static/js/admin/upload.js"},
-		},
-		Error: msg,
+		PageData: uploadPageData(authmid.GetUser(r.Context())),
+		Error:    msg,
 	})
 }
 
@@ -215,17 +212,53 @@ func (h *PostHandler) detail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	pageData := web.PublicPageData(post.Title+" — Cairn", postDescription(post.Title, post.ContentHTML), "/posts/"+url.PathEscape(post.Slug))
+	pageData.OpenGraphType = "article"
+	pageData.Active = "blog"
+	pageData.Page = "post"
+	pageData.User = authmid.GetUser(r.Context())
+	pageData.Scripts = []string{"/static/js/vendor/htmx-2.0.4.min.js", "/static/js/blog/comments.js"}
 	h.r.Render(w, "post", postDetailPage{
-		PageData: web.PageData{
-			Title:   post.Title + " — Cairn",
-			Active:  "blog",
-			Page:    "post",
-			User:    authmid.GetUser(r.Context()),
-			Scripts: []string{"/static/js/vendor/htmx-2.0.4.min.js", "/static/js/blog/comments.js"},
-		},
+		PageData: pageData,
 		Post:     post,
 		Content:  template.HTML(post.ContentHTML),
 		Slug:     post.Slug,
 		Comments: comments,
 	})
+}
+
+func uploadPageData(user *auth.User) web.PageData {
+	data := web.PrivatePageData("上传文章 — Cairn")
+	data.Active = "blog"
+	data.User = user
+	data.Scripts = []string{"/static/js/admin/upload.js"}
+	return data
+}
+
+func postDescription(title, contentHTML string) string {
+	blockSpacing := strings.NewReplacer(
+		"</p>", " </p>",
+		"</div>", " </div>",
+		"</li>", " </li>",
+		"</h1>", " </h1>",
+		"</h2>", " </h2>",
+		"</h3>", " </h3>",
+		"</h4>", " </h4>",
+		"</h5>", " </h5>",
+		"</h6>", " </h6>",
+	)
+	contentHTML = blockSpacing.Replace(contentHTML)
+	text := html.UnescapeString(bluemonday.StrictPolicy().Sanitize(contentHTML))
+	text = strings.Join(strings.Fields(text), " ")
+	text = strings.TrimSpace(strings.TrimPrefix(text, title))
+	text = strings.TrimSpace(strings.TrimPrefix(text, "摘要"))
+	if text == "" {
+		return title
+	}
+	description := title + "：" + text
+	runes := []rune(description)
+	if len(runes) > 155 {
+		return string(runes[:154]) + "…"
+	}
+	return description
 }

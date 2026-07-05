@@ -20,6 +20,7 @@ import (
 	blogrepo "cairn.cn/internal/blog/repository"
 	blogsvc "cairn.cn/internal/blog/service"
 	"cairn.cn/internal/config"
+	"cairn.cn/internal/seo"
 	toolhandler "cairn.cn/internal/tool/handler"
 	toolsvc "cairn.cn/internal/tool/service"
 	"cairn.cn/internal/web"
@@ -78,6 +79,7 @@ func buildRouter(cfg *config.Config, db *pgxpool.Pool, renderer *web.Renderer) h
 
 	toolService := toolsvc.New()
 	toolHandler := toolhandler.New(renderer, toolService)
+	seoHandler := seo.New(postService)
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -92,6 +94,7 @@ func buildRouter(cfg *config.Config, db *pgxpool.Pool, renderer *web.Renderer) h
 	fileServer(r, "/static", http.Dir("web/static"))
 
 	r.Get("/healthz", healthz)
+	seoHandler.RegisterRoutes(r)
 
 	r.Get("/login", authHandler.LoginPage)
 	r.With(web.RateLimit(10, time.Minute)).Post("/login", authHandler.Login)
@@ -107,6 +110,7 @@ func buildRouter(cfg *config.Config, db *pgxpool.Pool, renderer *web.Renderer) h
 }
 
 func healthz(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`{"status":"ok","version":"dev"}`))

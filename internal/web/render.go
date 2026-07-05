@@ -12,12 +12,36 @@ import (
 
 // PageData is shared by full-page templates.
 type PageData struct {
-	Title     string
-	Active    string
-	Page      string
-	User      *auth.User
-	Scripts   []string
-	BodyClass string
+	Title         string
+	Description   string
+	Canonical     string
+	Robots        string
+	OpenGraphType string
+	Active        string
+	Page          string
+	User          *auth.User
+	Scripts       []string
+	BodyClass     string
+}
+
+const SiteBaseURL = "https://cairn.cn"
+
+func CanonicalURL(path string) string {
+	return SiteBaseURL + path
+}
+
+func PublicPageData(title, description, path string) PageData {
+	return PageData{
+		Title:         title,
+		Description:   description,
+		Canonical:     CanonicalURL(path),
+		Robots:        "index,follow",
+		OpenGraphType: "website",
+	}
+}
+
+func PrivatePageData(title string) PageData {
+	return PageData{Title: title, Robots: "noindex,nofollow"}
 }
 
 // Renderer centralizes template execution and HTTP response details.

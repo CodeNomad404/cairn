@@ -23,6 +23,7 @@ type PostRepo interface {
 	Create(ctx context.Context, p *Post) error
 	GetBySlug(ctx context.Context, slug string) (*Post, error)
 	ListPublished(ctx context.Context, limit, offset int) ([]Post, error)
+	ListPublishedMetadata(ctx context.Context) ([]Post, error)
 }
 
 // Comment 对应数据库 comments 表的一条记录
