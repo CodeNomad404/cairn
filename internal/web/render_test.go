@@ -19,6 +19,7 @@ func TestPublicPageMetadata(t *testing.T) {
 	body := recorder.Body.String()
 
 	for _, want := range []string{
+		`<meta name="baidu-site-verification" content="codeva-vz0JbMJvVI">`,
 		`<meta name="description" content="测试描述">`,
 		`<meta name="robots" content="index,follow">`,
 		`<link rel="canonical" href="https://cairn.cn/tools">`,
