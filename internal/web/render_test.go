@@ -51,3 +51,26 @@ func TestPrivatePageMetadata(t *testing.T) {
 		t.Fatal("private page must not emit a canonical URL")
 	}
 }
+
+func TestJSONToolHelpfulContent(t *testing.T) {
+	renderer, err := NewRenderer("../../web/templates/*.html", slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	data := struct{ PageData }{PublicPageData("在线 JSON 格式化工具 — Cairn", "测试描述", "/tools/json")}
+	renderer.Render(recorder, "json-tool", data)
+	body := recorder.Body.String()
+
+	for _, want := range []string{
+		`<h1 class="mt-1 text-2xl font-extrabold">JSON 格式化</h1>`,
+		`在线 JSON 格式化与校验`,
+		`如何使用`,
+		`输入内容不会发送到 Cairn 服务器`,
+		`为什么 JSON 校验失败？`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("JSON tool page does not contain %q", want)
+		}
+	}
+}
