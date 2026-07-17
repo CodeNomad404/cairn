@@ -12,12 +12,12 @@ https://gitee.com/ccairn/cairn
 
 ```text
 master ──┬───────────────────────────  主线；生产部署只读取这里
-         ├── feature/homepage-layout  首页改版
-         └── feature/post-card        文章卡片优化
+         ├── feature/F001_首页布局     首页改版
+         └── feature/F002_文章卡片     文章卡片优化
 ```
 
 - 不直接在 `master` 上开发或推送。
-- 每个需求从最新的 `master` 创建一个 `feature/...` 分支。
+- 每个需求从最新的 `master` 创建一个 `feature/F序号_需求名` 分支。
 - 功能完成后，通过 Gitee 合并请求把功能分支合入 `master`。
 - 只有仓库维护者合并 `master`；合并后才具备部署资格。
 - 不使用 `develop`、`release` 或仓库中其他旧分支作为开发起点。
@@ -35,10 +35,10 @@ git pull --ff-only origin master
 
 ### 2. 创建功能分支
 
-分支名使用 `feature/` 前缀和简短英文描述：
+分支名格式固定为 `feature/F序号_需求名`。序号按需求递增，需求名使用简短中文描述：
 
 ```bash
-git switch -c feature/homepage-layout
+git switch -c feature/F001_首页布局
 ```
 
 一个分支只做一个明确需求。不要在同一个分支混入不相关的页面、重构或修复。
@@ -58,12 +58,12 @@ git commit -m "完善首页首屏布局"
 ### 4. 推送分支并创建合并请求
 
 ```bash
-git push -u origin feature/homepage-layout
+git push -u origin feature/F001_首页布局
 ```
 
 随后在 Gitee 创建合并请求：
 
-- 源分支：`feature/homepage-layout`
+- 源分支：`feature/F001_首页布局`
 - 目标分支：`master`
 - 描述：说明做了什么、如何验证，以及需要确认的事项。
 
