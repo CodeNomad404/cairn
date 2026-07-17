@@ -102,7 +102,7 @@ Then run it from the repository root:
 ```
 
 The script does not inspect, commit, or push the local Git repository. It only
-connects to the server. The server clones or updates `main` in its source cache
+connects to the server. The server clones or updates `master` in its source cache
 at `/opt/cairn-repo`, downloads dependencies, tests, builds, backs up PostgreSQL,
 runs forward migrations, installs the new binary, restarts the service, and
 checks `/healthz`. No source files are uploaded from the local machine. If the

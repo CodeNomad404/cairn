@@ -12,7 +12,7 @@ tasks:
       - go build -o bin/cairn ./cmd/server
 
   deploy:
-    desc: Pull and deploy the latest main branch to production
+    desc: Pull and deploy the latest master branch to production
     cmds:
       - ./deploy/deploy.sh
 

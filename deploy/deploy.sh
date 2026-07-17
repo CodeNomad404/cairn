@@ -120,8 +120,8 @@ fi
 
 if [[ -d "${REMOTE_REPO_DIR}/.git" ]]; then
   git -C "${REMOTE_REPO_DIR}" remote set-url origin "${GITEE_REPO_URL}"
-  git -C "${REMOTE_REPO_DIR}" fetch --prune origin main
-  git -C "${REMOTE_REPO_DIR}" checkout -B main origin/main
+  git -C "${REMOTE_REPO_DIR}" fetch --prune origin master
+  git -C "${REMOTE_REPO_DIR}" checkout -B master origin/master
 else
   if [[ -e "${REMOTE_REPO_DIR}" && -n "$(ls -A "${REMOTE_REPO_DIR}")" ]]; then
     printf 'server repository path exists but is not a Git repository: %s\n' "${REMOTE_REPO_DIR}" >&2
@@ -129,7 +129,7 @@ else
   fi
   sudo mkdir -p "${REMOTE_REPO_DIR}"
   sudo chown "$(id -un):$(id -gn)" "${REMOTE_REPO_DIR}"
-  git clone --branch main --single-branch \
+  git clone --branch master --single-branch \
     "${GITEE_REPO_URL}" "${REMOTE_REPO_DIR}"
 fi
 
