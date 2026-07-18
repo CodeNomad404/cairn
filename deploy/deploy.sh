@@ -120,7 +120,8 @@ fi
 
 if [[ -d "${REMOTE_REPO_DIR}/.git" ]]; then
   git -C "${REMOTE_REPO_DIR}" remote set-url origin "${GITEE_REPO_URL}"
-  git -C "${REMOTE_REPO_DIR}" fetch --prune origin master
+  git -C "${REMOTE_REPO_DIR}" fetch --prune origin \
+    +refs/heads/master:refs/remotes/origin/master
   git -C "${REMOTE_REPO_DIR}" checkout -B master origin/master
 else
   if [[ -e "${REMOTE_REPO_DIR}" && -n "$(ls -A "${REMOTE_REPO_DIR}")" ]]; then
