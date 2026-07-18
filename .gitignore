@@ -23,4 +23,5 @@ backups/
 *.tgz
 
 # Content drafts
-docs/
+docs/*
+!docs/Windows本地开发环境.md
