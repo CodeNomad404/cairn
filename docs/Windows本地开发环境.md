@@ -166,13 +166,13 @@ $env:DB_PASSWORD = "cairn_dev"
 执行数据库迁移：
 
 ```powershell
-migrate -path migrations -database "postgres://cairn:$env:DB_PASSWORD@localhost:5432/cairn?sslmode=disable" up
+migrate -path migrations -database "postgres:/cairn:$env:DB_PASSWORD@localhost:5432/cairn?sslmode=disable" up
 ```
 
 查看当前迁移版本：
 
 ```powershell
-migrate -path migrations -database "postgres://cairn:$env:DB_PASSWORD@localhost:5432/cairn?sslmode=disable" version
+migrate -path migrations -database "postgres://cairn:$($env:DB_PASSWORD)@localhost:5432/cairn?sslmode=disable" version
 ```
 
 迁移只需要在首次创建数据库或仓库新增迁移文件后执行。重复执行 `up` 不会重复创建已经应用的结构。
