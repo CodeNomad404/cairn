@@ -1,129 +1,122 @@
 package handler
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 
-	"cairn.cn/internal/auth"
 	authmid "cairn.cn/internal/auth/middleware"
 	"cairn.cn/internal/blog"
-	"cairn.cn/internal/blog/service"
 	"cairn.cn/internal/web"
 )
 
-// CommentHandler 评论相关的 HTTP 处理器
+type commentPostSource interface {
+	GetBySlug(ctx context.Context, slug string) (*blog.Post, error)
+}
+
+type commentSource interface {
+	Create(ctx context.Context, postID int64, parentID *int64, userID int64, content string) (*blog.Comment, error)
+	ListByPostID(ctx context.Context, postID int64) ([]blog.Comment, error)
+	GetByID(ctx context.Context, id int64) (*blog.Comment, error)
+	Delete(ctx context.Context, id int64) error
+}
+
 type CommentHandler struct {
-	postSvc    *service.PostService
-	commentSvc *service.CommentService
-	r          *web.Renderer
+	posts    commentPostSource
+	comments commentSource
 }
 
-// NewCommentHandler 创建 CommentHandler 实例
-func NewCommentHandler(postSvc *service.PostService, commentSvc *service.CommentService, renderer *web.Renderer) *CommentHandler {
-	return &CommentHandler{postSvc: postSvc, commentSvc: commentSvc, r: renderer}
+func NewCommentHandler(posts commentPostSource, comments commentSource) *CommentHandler {
+	return &CommentHandler{posts: posts, comments: comments}
 }
 
-type commentSection struct {
-	Slug     string
-	Comments []blog.Comment
-	User     *auth.User
-}
-
-// RegisterRoutes 向 chi 路由注册评论相关路由
 func (h *CommentHandler) RegisterRoutes(r chi.Router) {
-	r.With(web.RateLimit(10, time.Minute)).Post("/posts/{slug}/comments", h.create)
+	r.Get("/posts/{slug}/comments", h.list)
+	r.Post("/posts/{slug}/comments", h.create)
 	r.Delete("/comments/{id}", h.delete)
 }
 
-// create 处理评论提交
+func (h *CommentHandler) list(w http.ResponseWriter, r *http.Request) {
+	post, ok := h.post(w, r)
+	if !ok {
+		return
+	}
+	comments, err := h.comments.ListByPostID(r.Context(), post.ID)
+	if err != nil {
+		web.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to load comments")
+		return
+	}
+	web.WriteJSON(w, http.StatusOK, struct {
+		Items []blog.Comment `json:"items"`
+	}{Items: comments})
+}
+
 func (h *CommentHandler) create(w http.ResponseWriter, r *http.Request) {
 	user := authmid.GetUser(r.Context())
 	if user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		web.WriteError(w, http.StatusUnauthorized, "unauthorized", "login required")
 		return
 	}
-
-	slug := slugParam(r)
-	post, err := h.postSvc.GetBySlug(r.Context(), slug)
+	post, ok := h.post(w, r)
+	if !ok {
+		return
+	}
+	var input struct {
+		Content  string `json:"content"`
+		ParentID *int64 `json:"parent_id"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32<<10)).Decode(&input); err != nil {
+		web.WriteError(w, http.StatusBadRequest, "invalid_request", "valid JSON is required")
+		return
+	}
+	comment, err := h.comments.Create(r.Context(), post.ID, input.ParentID, user.ID, input.Content)
 	if err != nil {
-		http.NotFound(w, r)
+		web.WriteError(w, http.StatusUnprocessableEntity, "invalid_comment", err.Error())
 		return
 	}
-
-	parentIDStr := r.FormValue("parent_id")
-	var parentID *int64
-	if pid, err := strconv.ParseInt(parentIDStr, 10, 64); err == nil && pid > 0 {
-		parentID = &pid
-	}
-
-	comment, err := h.commentSvc.Create(r.Context(), post.ID, parentID,
-		user.ID,
-		r.FormValue("content"),
-	)
-
-	isHX := r.Header.Get("HX-Request") == "true"
-
-	if err != nil {
-		if isHX {
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			w.WriteHeader(http.StatusUnprocessableEntity)
-			_, _ = w.Write([]byte(`<div class="text-red-600 text-sm mt-2">` + err.Error() + `</div>`))
-			return
-		}
-		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
-		return
-	}
-
-	if isHX {
-		comments, err := h.commentSvc.ListByPostID(r.Context(), post.ID)
-		if err != nil {
-			http.Error(w, "failed to load comments", http.StatusInternalServerError)
-			return
-		}
-		h.r.Render(w, "comment-section", commentSection{
-			Slug:     post.Slug,
-			Comments: comments,
-			User:     user,
-		})
-		return
-	}
-
-	http.Redirect(w, r, "/posts/"+slug+"#comments", http.StatusSeeOther)
-	_ = comment
+	web.WriteJSON(w, http.StatusCreated, comment)
 }
 
-// delete 处理评论删除
 func (h *CommentHandler) delete(w http.ResponseWriter, r *http.Request) {
 	user := authmid.GetUser(r.Context())
 	if user == nil {
-		http.Error(w, "login required", http.StatusUnauthorized)
+		web.WriteError(w, http.StatusUnauthorized, "unauthorized", "login required")
 		return
 	}
-
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || id < 1 {
+		web.WriteError(w, http.StatusBadRequest, "invalid_request", "comment id must be a positive integer")
 		return
 	}
-
-	comment, err := h.commentSvc.GetByID(r.Context(), id)
+	comment, err := h.comments.GetByID(r.Context(), id)
 	if err != nil {
-		http.NotFound(w, r)
+		web.WriteError(w, http.StatusNotFound, "not_found", "comment not found")
 		return
 	}
 	if user.Role != "admin" && comment.UserID != user.ID {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		web.WriteError(w, http.StatusForbidden, "forbidden", "cannot delete this comment")
 		return
 	}
-
-	if err := h.commentSvc.Delete(r.Context(), id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if err := h.comments.Delete(r.Context(), id); err != nil {
+		web.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to delete comment")
 		return
 	}
+	w.WriteHeader(http.StatusNoContent)
+}
 
-	w.WriteHeader(http.StatusOK)
+func (h *CommentHandler) post(w http.ResponseWriter, r *http.Request) (*blog.Post, bool) {
+	post, err := h.posts.GetBySlug(r.Context(), chi.URLParam(r, "slug"))
+	if errors.Is(err, blog.ErrPostNotFound) {
+		web.WriteError(w, http.StatusNotFound, "not_found", "post not found")
+		return nil, false
+	}
+	if err != nil {
+		web.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to load post")
+		return nil, false
+	}
+	return post, true
 }

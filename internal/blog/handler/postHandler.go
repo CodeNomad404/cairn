@@ -1,264 +1,171 @@
 package handler
 
 import (
-	"fmt"
-	"html"
-	"html/template"
-	"io"
+	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
-	"net/url"
-	"path/filepath"
-	"strings"
+	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/microcosm-cc/bluemonday"
 
-	"cairn.cn/internal/auth"
 	authmid "cairn.cn/internal/auth/middleware"
 	"cairn.cn/internal/blog"
-	"cairn.cn/internal/blog/service"
 	"cairn.cn/internal/web"
 )
 
-const maxUploadSize = 10 << 20 // 10 MB
+const (
+	defaultPageSize = 20
+	maxPageSize     = 100
+)
 
-// PostHandler 博客文章相关的 HTTP 处理器
+type postSource interface {
+	GetBySlug(ctx context.Context, slug string) (*blog.Post, error)
+	ListPublished(ctx context.Context, limit, offset int) ([]blog.Post, error)
+	Publish(ctx context.Context, slug, title, contentMD string) (*blog.Post, error)
+}
+
+// PostHandler exposes blog posts over HTTP.
 type PostHandler struct {
-	svc        *service.PostService
-	commentSvc *service.CommentService
-	r          *web.Renderer
+	posts postSource
 }
 
-// New 创建 PostHandler 实例
-func New(svc *service.PostService, commentSvc *service.CommentService, renderer *web.Renderer) *PostHandler {
-	return &PostHandler{svc: svc, commentSvc: commentSvc, r: renderer}
+func NewPostHandler(posts postSource) *PostHandler {
+	return &PostHandler{posts: posts}
 }
 
-type homePage struct {
-	web.PageData
-}
-
-type postListPage struct {
-	web.PageData
-	Posts []blog.Post
-}
-
-type uploadPage struct {
-	web.PageData
-	Success bool
-	Slug    string
-	Error   string
-}
-
-type postDetailPage struct {
-	web.PageData
-	Post     *blog.Post
-	Content  template.HTML
-	Slug     string
-	Comments []blog.Comment
-}
-
-// RegisterRoutes 向 chi 路由注册文章相关的所有路由
 func (h *PostHandler) RegisterRoutes(r chi.Router) {
-	r.Get("/", h.home)
 	r.Get("/posts", h.list)
 	r.Get("/posts/{slug}", h.detail)
-	r.Get("/upload", h.uploadPage)
-	r.Post("/upload", h.upload)
+	r.Post("/posts", h.create)
 }
 
-// home 欢迎页
-func (h *PostHandler) home(w http.ResponseWriter, r *http.Request) {
-	h.r.Render(w, "home", homePage{
-		PageData: func() web.PageData {
-			data := web.PublicPageData("Cairn · 石堆碑", "Cairn 技术博客，记录 Go、Web 开发、PostgreSQL、服务端渲染与个人网站建设实践，并提供实用在线工具。", "/")
-			data.BodyClass = "welcome-page flex flex-col"
-			return data
-		}(),
-	})
+type postSummary struct {
+	ID          int64      `json:"id"`
+	Slug        string     `json:"slug"`
+	Title       string     `json:"title"`
+	PublishedAt *time.Time `json:"published_at"`
 }
 
-// list 文章列表页
+type postDetail struct {
+	postSummary
+	ContentHTML string `json:"content_html"`
+}
+
+type postListResponse struct {
+	Items    []postSummary `json:"items"`
+	Page     int           `json:"page"`
+	PageSize int           `json:"page_size"`
+	HasMore  bool          `json:"has_more"`
+}
+
 func (h *PostHandler) list(w http.ResponseWriter, r *http.Request) {
-	posts, err := h.svc.ListPublished(r.Context(), 20, 0)
-	if err != nil {
-		http.Error(w, "failed to load posts", http.StatusInternalServerError)
+	page, pageSize, ok := pagination(w, r)
+	if !ok {
 		return
 	}
 
-	h.r.Render(w, "index", postListPage{
-		PageData: func() web.PageData {
-			data := web.PublicPageData("技术博客 — Cairn", "Cairn 技术博客专注 Go、PostgreSQL、服务端渲染和网站工程实践，分享个人项目开发中的经验、问题与总结。", "/posts")
-			data.Active = "blog"
-			data.User = authmid.GetUser(r.Context())
-			return data
-		}(),
-		Posts: posts,
+	posts, err := h.posts.ListPublished(r.Context(), pageSize+1, (page-1)*pageSize)
+	if err != nil {
+		web.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to load posts")
+		return
+	}
+
+	hasMore := len(posts) > pageSize
+	if hasMore {
+		posts = posts[:pageSize]
+	}
+
+	items := make([]postSummary, len(posts))
+	for i, post := range posts {
+		items[i] = summary(post)
+	}
+
+	web.WriteJSON(w, http.StatusOK, postListResponse{
+		Items:    items,
+		Page:     page,
+		PageSize: pageSize,
+		HasMore:  hasMore,
 	})
 }
 
-// uploadPage 上传页面（GET），仅 admin
-func (h *PostHandler) uploadPage(w http.ResponseWriter, r *http.Request) {
-	user := authmid.GetUser(r.Context())
-	if user == nil || user.Role != "admin" {
-		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write([]byte("只有站长可以发布文章"))
-		return
-	}
-	h.r.Render(w, "upload", uploadPage{
-		PageData: func() web.PageData {
-			data := web.PrivatePageData("上传文章 — Cairn")
-			data.Active = "blog"
-			data.User = user
-			data.Scripts = []string{"/static/js/admin/upload.js"}
-			return data
-		}(),
-	})
-}
-
-// upload 处理文件上传（POST），仅 admin
-func (h *PostHandler) upload(w http.ResponseWriter, r *http.Request) {
-	user := authmid.GetUser(r.Context())
-	if user == nil || user.Role != "admin" {
-		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write([]byte("只有站长可以发布文章"))
-		return
-	}
-	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
-	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
-		h.renderUploadError(w, r, "文件太大，最大 10MB")
-		return
-	}
-
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		h.renderUploadError(w, r, "请选择一个 .md 文件")
-		return
-	}
-	defer func() {
-		_ = file.Close()
-	}()
-
-	ext := strings.ToLower(filepath.Ext(header.Filename))
-	if ext != ".md" && ext != ".markdown" {
-		h.renderUploadError(w, r, "只支持 .md 或 .markdown 文件")
-		return
-	}
-
-	mdBytes, err := io.ReadAll(file)
-	if err != nil {
-		h.renderUploadError(w, r, "读取文件失败")
-		return
-	}
-
-	slug := slugFromFilename(header.Filename)
-	title := extractTitle(string(mdBytes))
-	if title == "" {
-		title = slug
-	}
-
-	post, err := h.svc.Publish(r.Context(), slug, title, string(mdBytes))
-	if err != nil {
-		h.renderUploadError(w, r, fmt.Sprintf("发布失败：%v", err))
-		return
-	}
-
-	h.r.Render(w, "upload", uploadPage{
-		PageData: uploadPageData(authmid.GetUser(r.Context())),
-		Success:  true,
-		Slug:     post.Slug,
-	})
-}
-
-// renderUploadError 渲染带错误信息的上传页面
-func (h *PostHandler) renderUploadError(w http.ResponseWriter, r *http.Request, msg string) {
-	h.r.RenderStatus(w, http.StatusUnprocessableEntity, "upload", uploadPage{
-		PageData: uploadPageData(authmid.GetUser(r.Context())),
-		Error:    msg,
-	})
-}
-
-// slugFromFilename 从文件名提取 slug（去掉扩展名，转小写）
-func slugFromFilename(name string) string {
-	base := filepath.Base(name)
-	ext := filepath.Ext(base)
-	slug := strings.TrimSuffix(base, ext)
-	return strings.ToLower(strings.TrimSpace(slug))
-}
-
-// extractTitle 从 Markdown 内容中提取第一个 # 标题
-func extractTitle(md string) string {
-	for _, line := range strings.Split(md, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "# ") {
-			return strings.TrimSpace(strings.TrimPrefix(trimmed, "# "))
-		}
-	}
-	return ""
-}
-
-// detail 文章详情页（含评论区）
 func (h *PostHandler) detail(w http.ResponseWriter, r *http.Request) {
-	slug := slugParam(r)
-	post, err := h.svc.GetBySlug(r.Context(), slug)
+	post, err := h.posts.GetBySlug(r.Context(), chi.URLParam(r, "slug"))
+	if errors.Is(err, blog.ErrPostNotFound) {
+		web.WriteError(w, http.StatusNotFound, "not_found", "post not found")
+		return
+	}
 	if err != nil {
-		http.NotFound(w, r)
+		web.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to load post")
 		return
 	}
 
-	comments, err := h.commentSvc.ListByPostID(r.Context(), post.ID)
-	if err != nil {
-		http.Error(w, "failed to load comments", http.StatusInternalServerError)
-		return
-	}
-
-	pageData := web.PublicPageData(post.Title+" — Cairn", postDescription(post.Title, post.ContentHTML), "/posts/"+url.PathEscape(post.Slug))
-	pageData.OpenGraphType = "article"
-	pageData.Active = "blog"
-	pageData.Page = "post"
-	pageData.User = authmid.GetUser(r.Context())
-	pageData.Scripts = []string{"/static/js/vendor/htmx-2.0.4.min.js", "/static/js/blog/comments.js"}
-	h.r.Render(w, "post", postDetailPage{
-		PageData: pageData,
-		Post:     post,
-		Content:  template.HTML(post.ContentHTML),
-		Slug:     post.Slug,
-		Comments: comments,
+	web.WriteJSON(w, http.StatusOK, postDetail{
+		postSummary: summary(*post),
+		ContentHTML: post.ContentHTML,
 	})
 }
 
-func uploadPageData(user *auth.User) web.PageData {
-	data := web.PrivatePageData("上传文章 — Cairn")
-	data.Active = "blog"
-	data.User = user
-	data.Scripts = []string{"/static/js/admin/upload.js"}
-	return data
+func (h *PostHandler) create(w http.ResponseWriter, r *http.Request) {
+	user := authmid.GetUser(r.Context())
+	if user == nil {
+		web.WriteError(w, http.StatusUnauthorized, "unauthorized", "login required")
+		return
+	}
+	if user.Role != "admin" {
+		web.WriteError(w, http.StatusForbidden, "forbidden", "admin role required")
+		return
+	}
+
+	var input struct {
+		Slug      string `json:"slug"`
+		Title     string `json:"title"`
+		ContentMD string `json:"content_md"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&input); err != nil || input.Slug == "" || input.Title == "" || input.ContentMD == "" {
+		web.WriteError(w, http.StatusBadRequest, "invalid_request", "slug, title, and content_md are required")
+		return
+	}
+
+	post, err := h.posts.Publish(r.Context(), input.Slug, input.Title, input.ContentMD)
+	if err != nil {
+		web.WriteError(w, http.StatusUnprocessableEntity, "invalid_post", err.Error())
+		return
+	}
+	web.WriteJSON(w, http.StatusCreated, postDetail{postSummary: summary(*post), ContentHTML: post.ContentHTML})
 }
 
-func postDescription(title, contentHTML string) string {
-	blockSpacing := strings.NewReplacer(
-		"</p>", " </p>",
-		"</div>", " </div>",
-		"</li>", " </li>",
-		"</h1>", " </h1>",
-		"</h2>", " </h2>",
-		"</h3>", " </h3>",
-		"</h4>", " </h4>",
-		"</h5>", " </h5>",
-		"</h6>", " </h6>",
-	)
-	contentHTML = blockSpacing.Replace(contentHTML)
-	text := html.UnescapeString(bluemonday.StrictPolicy().Sanitize(contentHTML))
-	text = strings.Join(strings.Fields(text), " ")
-	text = strings.TrimSpace(strings.TrimPrefix(text, title))
-	text = strings.TrimSpace(strings.TrimPrefix(text, "摘要"))
-	if text == "" {
-		return title
+func pagination(w http.ResponseWriter, r *http.Request) (int, int, bool) {
+	page, err := positiveInt(r.URL.Query().Get("page"), 1)
+	if err != nil {
+		web.WriteError(w, http.StatusBadRequest, "invalid_request", "page must be a positive integer")
+		return 0, 0, false
 	}
-	description := title + "：" + text
-	runes := []rune(description)
-	if len(runes) > 155 {
-		return string(runes[:154]) + "…"
+	pageSize, err := positiveInt(r.URL.Query().Get("page_size"), defaultPageSize)
+	if err != nil || pageSize > maxPageSize {
+		web.WriteError(w, http.StatusBadRequest, "invalid_request", "page_size must be between 1 and 100")
+		return 0, 0, false
 	}
-	return description
+	return page, pageSize, true
+}
+
+func positiveInt(raw string, fallback int) (int, error) {
+	if raw == "" {
+		return fallback, nil
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 1 {
+		return 0, errors.New("must be positive")
+	}
+	return value, nil
+}
+
+func summary(post blog.Post) postSummary {
+	return postSummary{
+		ID:          post.ID,
+		Slug:        post.Slug,
+		Title:       post.Title,
+		PublishedAt: post.PublishedAt,
+	}
 }

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -48,13 +47,7 @@ func New(ctx context.Context, logger *slog.Logger) (*App, error) {
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
 
-	renderer, err := web.NewRenderer("web/templates/*.html", logger)
-	if err != nil {
-		db.Close()
-		return nil, fmt.Errorf("load templates: %w", err)
-	}
-
-	router := buildRouter(cfg, db, renderer)
+	router := buildRouter(cfg, db)
 	return &App{Config: cfg, DB: db, Router: router}, nil
 }
 
@@ -64,21 +57,21 @@ func (a *App) Close() {
 	}
 }
 
-func buildRouter(cfg *config.Config, db *pgxpool.Pool, renderer *web.Renderer) http.Handler {
+func buildRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 	userRepo := authrepo.NewUserRepo(db)
 	sessionRepo := authrepo.NewSessionRepo(db)
 	authService := authsvc.New(userRepo, sessionRepo)
-	authHandler := authhandler.New(authService, renderer, cfg.IsProduction())
+	authHandler := authhandler.NewAuthHandler(authService, cfg.IsProduction())
 
 	postRepo := blogrepo.New(db)
 	commentRepo := blogrepo.NewCommentRepo(db)
 	postService := blogsvc.New(postRepo)
 	commentService := blogsvc.NewCommentService(commentRepo)
-	postHandler := bloghandler.New(postService, commentService, renderer)
-	commentHandler := bloghandler.NewCommentHandler(postService, commentService, renderer)
+	postHandler := bloghandler.NewPostHandler(postService)
+	commentHandler := bloghandler.NewCommentHandler(postService, commentService)
 
 	toolService := toolsvc.New()
-	toolHandler := toolhandler.New(renderer, toolService)
+	toolHandler := toolhandler.New(toolService)
 	seoHandler := seo.New(postService)
 
 	r := chi.NewRouter()
@@ -91,20 +84,14 @@ func buildRouter(cfg *config.Config, db *pgxpool.Pool, renderer *web.Renderer) h
 	r.Use(web.SameOrigin())
 	r.Use(authmid.LoadUser(authService))
 
-	fileServer(r, "/static", http.Dir("web/static"))
-
 	r.Get("/healthz", healthz)
 	seoHandler.RegisterRoutes(r)
-
-	r.Get("/login", authHandler.LoginPage)
-	r.With(web.RateLimit(10, time.Minute)).Post("/login", authHandler.Login)
-	r.Get("/register", authHandler.RegisterPage)
-	r.With(web.RateLimit(5, time.Hour)).Post("/register", authHandler.Register)
-	r.Post("/logout", authHandler.Logout)
-
-	postHandler.RegisterRoutes(r)
-	commentHandler.RegisterRoutes(r)
-	toolHandler.RegisterRoutes(r)
+	r.Route("/api/v1", func(r chi.Router) {
+		r.With(web.RateLimit(10, time.Minute)).Mount("/auth", authRoutes(authHandler))
+		postHandler.RegisterRoutes(r)
+		commentHandler.RegisterRoutes(r)
+		toolHandler.RegisterRoutes(r)
+	})
 
 	return r
 }
@@ -116,12 +103,8 @@ func healthz(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(`{"status":"ok","version":"dev"}`))
 }
 
-func fileServer(r chi.Router, path string, root http.FileSystem) {
-	fs := http.StripPrefix(path, http.FileServer(root))
-	r.Get(path+"/*", func(w http.ResponseWriter, r *http.Request) {
-		if os.Getenv("DEV") == "true" {
-			w.Header().Set("Cache-Control", "no-cache")
-		}
-		fs.ServeHTTP(w, r)
-	})
+func authRoutes(h *authhandler.AuthHandler) http.Handler {
+	r := chi.NewRouter()
+	h.RegisterRoutes(r)
+	return r
 }

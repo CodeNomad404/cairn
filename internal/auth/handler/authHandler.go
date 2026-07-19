@@ -1,116 +1,102 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
 	"cairn.cn/internal/auth"
+	authmid "cairn.cn/internal/auth/middleware"
 	"cairn.cn/internal/auth/service"
 	"cairn.cn/internal/web"
 )
 
-// AuthHandler 认证相关的 HTTP 处理器
 type AuthHandler struct {
 	svc           *service.AuthService
-	r             *web.Renderer
 	secureCookies bool
 }
 
-func New(svc *service.AuthService, renderer *web.Renderer, secureCookies bool) *AuthHandler {
-	return &AuthHandler{svc: svc, r: renderer, secureCookies: secureCookies}
+func NewAuthHandler(svc *service.AuthService, secureCookies bool) *AuthHandler {
+	return &AuthHandler{svc: svc, secureCookies: secureCookies}
 }
 
-type authPage struct {
-	web.PageData
-	Error string
+func (h *AuthHandler) RegisterRoutes(r chi.Router) {
+	r.Post("/register", h.register)
+	r.Post("/login", h.login)
+	r.Post("/logout", h.logout)
+	r.Get("/me", h.me)
 }
 
-// LoginPage 登录页面 GET
-func (h *AuthHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
-	h.r.Render(w, "login", authPage{
-		PageData: web.PrivatePageData("登录 — Cairn"),
-	})
+type credentials struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
-// Login 处理登录 POST
-func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
-	username := r.FormValue("username")
-	password := r.FormValue("password")
-
-	token, _, err := h.svc.Login(r.Context(), username, password)
-	if err != nil {
-		h.r.RenderStatus(w, http.StatusUnprocessableEntity, "login", authPage{
-			PageData: web.PrivatePageData("登录 — Cairn"),
-			Error:    err.Error(),
-		})
+func (h *AuthHandler) register(w http.ResponseWriter, r *http.Request) {
+	input, ok := decodeCredentials(w, r)
+	if !ok {
 		return
 	}
-
+	if _, err := h.svc.Register(r.Context(), input.Username, input.Password); err != nil {
+		web.WriteError(w, http.StatusUnprocessableEntity, "registration_failed", err.Error())
+		return
+	}
+	token, user, err := h.svc.Login(r.Context(), input.Username, input.Password)
+	if err != nil {
+		web.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to create session")
+		return
+	}
 	h.setSessionCookie(w, token)
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	web.WriteJSON(w, http.StatusCreated, user)
 }
 
-// RegisterPage 注册页面 GET
-func (h *AuthHandler) RegisterPage(w http.ResponseWriter, r *http.Request) {
-	h.r.Render(w, "register", authPage{
-		PageData: web.PrivatePageData("注册 — Cairn"),
-	})
-}
-
-// Register 处理注册 POST
-func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
-	username := r.FormValue("username")
-	password := r.FormValue("password")
-
-	_, err := h.svc.Register(r.Context(), username, password)
-	if err != nil {
-		h.r.RenderStatus(w, http.StatusUnprocessableEntity, "register", authPage{
-			PageData: web.PrivatePageData("注册 — Cairn"),
-			Error:    err.Error(),
-		})
+func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request) {
+	input, ok := decodeCredentials(w, r)
+	if !ok {
 		return
 	}
-
-	// 注册成功后自动登录
-	token, _, err := h.svc.Login(r.Context(), username, password)
+	token, user, err := h.svc.Login(r.Context(), input.Username, input.Password)
 	if err != nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		web.WriteError(w, http.StatusUnauthorized, "invalid_credentials", "invalid username or password")
 		return
 	}
-
 	h.setSessionCookie(w, token)
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	web.WriteJSON(w, http.StatusOK, user)
 }
 
-// Logout 处理登出 POST
-func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) logout(w http.ResponseWriter, r *http.Request) {
 	if cookie, err := r.Cookie(auth.SessionCookie); err == nil {
 		_ = h.svc.Logout(r.Context(), cookie.Value)
 	}
+	h.clearSessionCookie(w)
+	w.WriteHeader(http.StatusNoContent)
+}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     auth.SessionCookie,
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   h.secureCookies,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   -1,
-		Expires:  time.Unix(1, 0),
-	})
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+func (h *AuthHandler) me(w http.ResponseWriter, r *http.Request) {
+	user := authmid.GetUser(r.Context())
+	if user == nil {
+		web.WriteError(w, http.StatusUnauthorized, "unauthorized", "login required")
+		return
+	}
+	web.WriteJSON(w, http.StatusOK, user)
+}
+
+func decodeCredentials(w http.ResponseWriter, r *http.Request) (credentials, bool) {
+	var input credentials
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&input); err != nil {
+		web.WriteError(w, http.StatusBadRequest, "invalid_request", "username and password are required")
+		return credentials{}, false
+	}
+	return input, true
 }
 
 func (h *AuthHandler) setSessionCookie(w http.ResponseWriter, token string) {
 	const sessionDuration = 30 * 24 * time.Hour
-	http.SetCookie(w, &http.Cookie{
-		Name:     auth.SessionCookie,
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   h.secureCookies,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   int(sessionDuration.Seconds()),
-		Expires:  time.Now().Add(sessionDuration),
-	})
+	http.SetCookie(w, &http.Cookie{Name: auth.SessionCookie, Value: token, Path: "/", HttpOnly: true, Secure: h.secureCookies, SameSite: http.SameSiteLaxMode, MaxAge: int(sessionDuration.Seconds()), Expires: time.Now().Add(sessionDuration)})
+}
+
+func (h *AuthHandler) clearSessionCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{Name: auth.SessionCookie, Value: "", Path: "/", HttpOnly: true, Secure: h.secureCookies, SameSite: http.SameSiteLaxMode, MaxAge: -1, Expires: time.Unix(1, 0)})
 }

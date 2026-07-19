@@ -2,8 +2,11 @@ package blog
 
 import (
 	"context"
+	"errors"
 	"time"
 )
+
+var ErrPostNotFound = errors.New("post not found")
 
 // Post 对应数据库 posts 表的一条记录
 type Post struct {
