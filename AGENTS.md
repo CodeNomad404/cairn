@@ -69,21 +69,20 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 - **语言**：Go 1.26
 - **服务器**：腾讯云轻量 2C2G，上海，Ubuntu 22.04，Docker CE
-- **当前状态**：Phase 1 骨架完成 — `/healthz` 能跑，数据库能连，热重载正常。下一步 Phase 2（博客 MVP）。
+- **当前状态**：后端已改为 `/api/v1` JSON API，前端采用 Vue 3；本地开发环境统一使用 Docker Compose，生产部署等待前端适配完成后再设计。
 
 ## 常用命令
 
 ```bash
-# 启动开发（热重载）
-DB_PASSWORD=cairn_dev air
+# 启动完整开发环境（前后端热重载）
+docker compose up --build
 
-# 数据库
-docker compose up -d        # 启动 PostgreSQL
-docker compose down          # 停止
-docker compose down -v       # 清空数据
+# 停止或清空本地环境
+docker compose down
+docker compose down -v       # 同时清空本地数据库
 
 # 构建与检查
-go build -o bin/cairn ./cmd/server   # 手动编译
+docker compose build
 golangci-lint run                    # 代码检查
 go mod tidy                          # 整理依赖
 
@@ -98,19 +97,19 @@ Taskfile 快捷命令：`task dev`、`task build`、`task lint`、`task db:up`�
 ```
 cmd/server/main.go        入口 — 组装配置、数据库、路由、优雅关闭
 internal/
-  config/                 viper 读 config.yaml + 环境变量 → Config 结构体
-  handler/                HTTP 处理函数（空，Phase 2 填）
-  service/                业务逻辑（空，Phase 2 填）
-  repository/             数据库操作（空，Phase 2 填）
-web/static/css/input.css  Tailwind CSS 入口（@tailwind base/components/utilities）
-web/templates/            Go html/template 模板（空，Phase 2 填）
-migrations/               golang-migrate SQL 迁移脚本（空，Phase 2 填）
-docs/                     项目文档 — 决策记录、开发日志、路线图
+  auth/                   认证模块 — handler/service/repository
+  blog/                   博客模块 — handler/service/repository
+  tool/                   工具模块 — handler/service
+  config/                 viper 读 config.yaml + 环境变量
+web/src/                  Vue 3 + TypeScript 前端
+migrations/               golang-migrate SQL 迁移脚本
+docker-compose.yml        本地开发环境
+docs/                     项目文档
 ```
 
-**已确定的技术栈**：`chi` 路由、`pgxpool`（直接连 PostgreSQL，没用 `database/sql` 包装层）、`slog`（JSON 格式输出到 stdout）、`viper`（读 config.yaml）、`html/template`（服务端渲染）、Tailwind CSS、HTMX + Alpine.js（Phase 3 开始用）。
+**已确定的技术栈**：Go 1.26、`chi`、`pgxpool`、PostgreSQL、`slog`、`viper`、Vue 3、TypeScript、Vue Router、Pinia、Vite、原生 `fetch`、Docker Compose、Caddy。
 
-**明确不用**：GORM、Gin/Beego/Echo、React/Vue/Next.js、Kubernetes、消息队列、Elasticsearch。完整技术栈和理由见 `docs/blog-project-discussion-2026-05-19.md` 第三节。
+**明确不用**：GORM、Gin/Beego/Echo、React/Next.js、Kubernetes、消息队列、Elasticsearch、Axios、Vuex。
 
 ## 已做的关键决策
 
@@ -118,9 +117,9 @@ docs/                     项目文档 — 决策记录、开发日志、路线�
 |---|---|---|
 | Redis | 延后，需要时再加 | diff-05-31 第三节 |
 | COS 对象存储 | 延后，先用本地目录存文件 | diff-05-31 第四节 |
-| Dockerfile / Caddyfile | 延后到 Phase 7 部署时再写 | diff-05-31 第五节 |
+| 本地容器化 | 前端、后端、数据库和迁移均使用 Docker Compose | `docker-compose.yml` |
 | CI/CD（GitHub Actions + TCR）| 延后，目前直接 ssh → go build → 重启 | diff-05-31 第六节 |
-| 本地 Go 运行方式 | 裸机直接跑（不用 Docker），air 才能检测文件变化 | diff-05-31 第二节 |
+| 本地运行方式 | Docker Compose；Vue 使用 Vite 热更新，Go 使用 Air 热更新 | `docker-compose.yml` |
 
 ## 技术总结
 当我每学过一个新知识新技术，需要总结成博客文档，放到网站上

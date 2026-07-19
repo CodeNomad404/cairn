@@ -1,0 +1,9 @@
+.git
+.idea
+.vscode
+bin
+tmp
+backups
+web/node_modules
+web/dist
+*.log

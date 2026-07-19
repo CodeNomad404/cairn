@@ -1,0 +1,4 @@
+:root { color: #1f2937; background: #f7f7f5; font-family: Inter, ui-sans-serif, system-ui, sans-serif; --text: #1f2937; --muted: #6b7280; --surface: #fff; --border: #e5e7eb; --accent: #2563eb; --accent-focus: rgb(37 99 235 / 25%); --danger: #b91c1c; --shadow: 0 18px 40px rgb(15 23 42 / 8%); }
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; }
+button, input { font: inherit; }
