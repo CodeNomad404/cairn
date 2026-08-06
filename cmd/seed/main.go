@@ -7,8 +7,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"cairn.cn/internal/blog/logic"
 	"cairn.cn/internal/blog/repository"
-	"cairn.cn/internal/blog/service"
 	"cairn.cn/internal/config"
 )
 
@@ -38,8 +38,12 @@ func main() {
 
 	// 插入
 	repo := repository.New(db)
-	svc := service.New(repo)
-	post, err := svc.Publish(ctx, "day-one-server-ready", "Cairn 的第一天：把服务器搞定了", string(md))
+	svc := logic.NewPostLogic(repo)
+	post, err := svc.Publish(ctx, &logic.PublishPostRequest{
+		Slug:      "day-one-server-ready",
+		Title:     "Cairn 的第一天：把服务器搞定了",
+		ContentMD: string(md),
+	})
 	if err != nil {
 		slog.Error("publish", "error", err)
 		os.Exit(1)

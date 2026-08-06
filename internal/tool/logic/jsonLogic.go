@@ -1,19 +1,19 @@
-package service
+package logic
 
 import (
 	"encoding/json"
 )
 
-// JSONService JSON 格式化工具的业务逻辑
-type JSONService struct{}
+// JSONLogic JSON 格式化工具的业务逻辑
+type JSONLogic struct{}
 
-// New 创建 JSONService
-func New() *JSONService {
-	return &JSONService{}
+// NewJSONLogic 创建 JSONLogic
+func NewJSONLogic() *JSONLogic {
+	return &JSONLogic{}
 }
 
 // Format 校验并格式化 JSON
-func (s *JSONService) Format(input string) (string, error) {
+func (s *JSONLogic) Format(input string) (string, error) {
 	var v any
 	if err := json.Unmarshal([]byte(input), &v); err != nil {
 		return "", err
@@ -26,6 +26,6 @@ func (s *JSONService) Format(input string) (string, error) {
 }
 
 // Validate 校验 JSON 是否合法
-func (s *JSONService) Validate(input string) bool {
+func (s *JSONLogic) Validate(input string) bool {
 	return json.Valid([]byte(input))
 }

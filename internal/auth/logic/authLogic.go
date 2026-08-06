@@ -1,4 +1,4 @@
-package service
+package logic
 
 import (
 	"context"
@@ -13,18 +13,18 @@ import (
 	"cairn.cn/internal/auth"
 )
 
-// AuthService 认证相关的业务逻辑
-type AuthService struct {
+// AuthLogic 认证相关的业务逻辑
+type AuthLogic struct {
 	userRepo    auth.UserRepo
 	sessionRepo auth.SessionRepo
 }
 
-func New(userRepo auth.UserRepo, sessionRepo auth.SessionRepo) *AuthService {
-	return &AuthService{userRepo: userRepo, sessionRepo: sessionRepo}
+func NewAuthLogic(userRepo auth.UserRepo, sessionRepo auth.SessionRepo) *AuthLogic {
+	return &AuthLogic{userRepo: userRepo, sessionRepo: sessionRepo}
 }
 
 // Register 注册新用户，返回创建的用户（不含密码）
-func (s *AuthService) Register(ctx context.Context, username, password string) (*auth.User, error) {
+func (s *AuthLogic) Register(ctx context.Context, username, password string) (*auth.User, error) {
 	username = strings.TrimSpace(username)
 	if len(username) < 2 || len(username) > 64 {
 		return nil, errors.New("用户名需要 2–64 个字符")
@@ -46,7 +46,7 @@ func (s *AuthService) Register(ctx context.Context, username, password string) (
 	u := &auth.User{
 		Username: username,
 		Password: string(hash),
-		Role:     "user", // 新注册默认普通用户
+		Role:     auth.RoleUser, // 新注册默认普通用户
 	}
 	if err := s.userRepo.Create(ctx, u); err != nil {
 		return nil, errors.New("创建用户失败")
@@ -55,7 +55,7 @@ func (s *AuthService) Register(ctx context.Context, username, password string) (
 }
 
 // Login 验证用户名密码，创建 session，返回 token
-func (s *AuthService) Login(ctx context.Context, username, password string) (string, *auth.User, error) {
+func (s *AuthLogic) Login(ctx context.Context, username, password string) (string, *auth.User, error) {
 	username = strings.TrimSpace(username)
 	if username == "" || password == "" {
 		return "", nil, errors.New("用户名和密码不能为空")
@@ -91,12 +91,12 @@ func (s *AuthService) Login(ctx context.Context, username, password string) (str
 }
 
 // Logout 登出，删除 session
-func (s *AuthService) Logout(ctx context.Context, token string) error {
+func (s *AuthLogic) Logout(ctx context.Context, token string) error {
 	return s.sessionRepo.Delete(ctx, token)
 }
 
 // GetUserByToken 通过 session token 获取用户
-func (s *AuthService) GetUserByToken(ctx context.Context, token string) (*auth.User, error) {
+func (s *AuthLogic) GetUserByToken(ctx context.Context, token string) (*auth.User, error) {
 	session, err := s.sessionRepo.GetByToken(ctx, token)
 	if err != nil {
 		return nil, err

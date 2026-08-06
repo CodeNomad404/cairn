@@ -12,16 +12,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	authhandler "cairn.cn/internal/auth/handler"
+	authlogic "cairn.cn/internal/auth/logic"
 	authmid "cairn.cn/internal/auth/middleware"
 	authrepo "cairn.cn/internal/auth/repository"
-	authsvc "cairn.cn/internal/auth/service"
 	bloghandler "cairn.cn/internal/blog/handler"
+	bloglogic "cairn.cn/internal/blog/logic"
 	blogrepo "cairn.cn/internal/blog/repository"
-	blogsvc "cairn.cn/internal/blog/service"
 	"cairn.cn/internal/config"
 	"cairn.cn/internal/seo"
 	toolhandler "cairn.cn/internal/tool/handler"
-	toolsvc "cairn.cn/internal/tool/service"
+	toollogic "cairn.cn/internal/tool/logic"
 	"cairn.cn/internal/web"
 )
 
@@ -60,19 +60,19 @@ func (a *App) Close() {
 func buildRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 	userRepo := authrepo.NewUserRepo(db)
 	sessionRepo := authrepo.NewSessionRepo(db)
-	authService := authsvc.New(userRepo, sessionRepo)
-	authHandler := authhandler.NewAuthHandler(authService, cfg.IsProduction())
+	authLogic := authlogic.NewAuthLogic(userRepo, sessionRepo)
+	authHandler := authhandler.NewAuthHandler(authLogic, cfg.IsProduction())
 
 	postRepo := blogrepo.New(db)
 	commentRepo := blogrepo.NewCommentRepo(db)
-	postService := blogsvc.New(postRepo)
-	commentService := blogsvc.NewCommentService(commentRepo)
-	postHandler := bloghandler.NewPostHandler(postService)
-	commentHandler := bloghandler.NewCommentHandler(postService, commentService)
+	postLogic := bloglogic.NewPostLogic(postRepo)
+	commentLogic := bloglogic.NewCommentLogic(commentRepo)
+	postHandler := bloghandler.NewPostHandler(postLogic)
+	commentHandler := bloghandler.NewCommentHandler(postLogic, commentLogic)
 
-	toolService := toolsvc.New()
-	toolHandler := toolhandler.New(toolService)
-	seoHandler := seo.New(postService)
+	toolLogic := toollogic.NewJSONLogic()
+	toolHandler := toolhandler.New(toolLogic)
+	seoHandler := seo.New(postLogic)
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -82,7 +82,7 @@ func buildRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 	r.Use(middleware.Timeout(30 * time.Second))
 	r.Use(web.SecurityHeaders(cfg.IsProduction()))
 	r.Use(web.SameOrigin())
-	r.Use(authmid.LoadUser(authService))
+	r.Use(authmid.LoadUser(authLogic))
 
 	r.Get("/healthz", healthz)
 	seoHandler.RegisterRoutes(r)

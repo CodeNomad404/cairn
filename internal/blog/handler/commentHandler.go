@@ -2,13 +2,13 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
 
+	"cairn.cn/internal/auth"
 	authmid "cairn.cn/internal/auth/middleware"
 	"cairn.cn/internal/blog"
 	"cairn.cn/internal/web"
@@ -69,8 +69,7 @@ func (h *CommentHandler) create(w http.ResponseWriter, r *http.Request) {
 		Content  string `json:"content"`
 		ParentID *int64 `json:"parent_id"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32<<10)).Decode(&input); err != nil {
-		web.WriteError(w, http.StatusBadRequest, "invalid_request", "valid JSON is required")
+	if !web.DecodeJSON(w, r, &input, 32<<10) {
 		return
 	}
 	comment, err := h.comments.Create(r.Context(), post.ID, input.ParentID, user.ID, input.Content)
@@ -97,7 +96,7 @@ func (h *CommentHandler) delete(w http.ResponseWriter, r *http.Request) {
 		web.WriteError(w, http.StatusNotFound, "not_found", "comment not found")
 		return
 	}
-	if user.Role != "admin" && comment.UserID != user.ID {
+	if user.Role != auth.RoleAdmin && comment.UserID != user.ID {
 		web.WriteError(w, http.StatusForbidden, "forbidden", "cannot delete this comment")
 		return
 	}

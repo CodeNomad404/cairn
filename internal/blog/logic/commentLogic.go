@@ -1,4 +1,4 @@
-package service
+package logic
 
 import (
 	"context"
@@ -10,24 +10,24 @@ import (
 	"cairn.cn/internal/blog"
 )
 
-// CommentService 评论相关的业务逻辑
-type CommentService struct {
+// CommentLogic 评论相关的业务逻辑
+type CommentLogic struct {
 	commentRepo blog.CommentRepo
 	policy      *bluemonday.Policy
 }
 
-// NewCommentService 创建 CommentService 实例
-func NewCommentService(commentRepo blog.CommentRepo) *CommentService {
+// NewCommentLogic 创建 CommentLogic 实例
+func NewCommentLogic(commentRepo blog.CommentRepo) *CommentLogic {
 	// 评论只允许纯文本，比文章更严格
 	policy := bluemonday.StrictPolicy()
-	return &CommentService{
+	return &CommentLogic{
 		commentRepo: commentRepo,
 		policy:      policy,
 	}
 }
 
 // Create 提交一条评论
-func (s *CommentService) Create(ctx context.Context, postID int64, parentID *int64,
+func (s *CommentLogic) Create(ctx context.Context, postID int64, parentID *int64,
 	userID int64, content string) (*blog.Comment, error) {
 
 	content = strings.TrimSpace(content)
@@ -64,16 +64,16 @@ func (s *CommentService) Create(ctx context.Context, postID int64, parentID *int
 }
 
 // ListByPostID 取某篇文章的评论
-func (s *CommentService) ListByPostID(ctx context.Context, postID int64) ([]blog.Comment, error) {
+func (s *CommentLogic) ListByPostID(ctx context.Context, postID int64) ([]blog.Comment, error) {
 	return s.commentRepo.ListByPostID(ctx, postID)
 }
 
 // GetByID 取一条评论
-func (s *CommentService) GetByID(ctx context.Context, id int64) (*blog.Comment, error) {
+func (s *CommentLogic) GetByID(ctx context.Context, id int64) (*blog.Comment, error) {
 	return s.commentRepo.GetByID(ctx, id)
 }
 
 // Delete 删除一条评论
-func (s *CommentService) Delete(ctx context.Context, id int64) error {
+func (s *CommentLogic) Delete(ctx context.Context, id int64) error {
 	return s.commentRepo.Delete(ctx, id)
 }

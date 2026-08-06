@@ -6,12 +6,16 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"cairn.cn/internal/auth"
+	authmid "cairn.cn/internal/auth/middleware"
 	"cairn.cn/internal/blog"
+	bloglogic "cairn.cn/internal/blog/logic"
 	"cairn.cn/internal/web"
 )
 
@@ -33,7 +37,7 @@ func (f *fakePostSource) GetBySlug(context.Context, string) (*blog.Post, error) 
 	return f.post, f.err
 }
 
-func (f *fakePostSource) Publish(context.Context, string, string, string) (*blog.Post, error) {
+func (f *fakePostSource) Publish(context.Context, *bloglogic.PublishPostRequest) (*blog.Post, error) {
 	return f.post, f.err
 }
 
@@ -136,5 +140,141 @@ func TestPostDetailDatabaseError(t *testing.T) {
 
 	if recorder.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500", recorder.Code)
+	}
+}
+
+func TestPostCreate(t *testing.T) {
+	publishedAt := time.Date(2026, time.July, 19, 8, 0, 0, 0, time.UTC)
+	source := &fakePostSource{post: &blog.Post{
+		ID:          1,
+		Slug:        "hello",
+		Title:       "Hello",
+		ContentHTML: "<p>Hello</p>",
+		PublishedAt: &publishedAt,
+	}}
+	body := strings.NewReader(`{"slug":"hello","title":"Hello","content_md":"# Hello"}`)
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/posts", body)
+	w := httptest.NewRecorder()
+
+	handler := NewPostHandler(source)
+	handler.create(w, r)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", w.Code)
+	}
+	if got := w.Header().Get("Content-Type"); got != "application/json; charset=utf-8" {
+		t.Fatalf("Content-Type = %q", got)
+	}
+
+	var response postDetail
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Slug != "hello" || response.ID != 1 || response.ContentHTML != "<p>Hello</p>" {
+		t.Fatalf("response = %#v", response)
+	}
+}
+
+func TestPostCreateRejectsInvalidJSON(t *testing.T) {
+	body := strings.NewReader(`not-json`)
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/posts", body)
+	w := httptest.NewRecorder()
+
+	handler := NewPostHandler(&fakePostSource{})
+	handler.create(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", w.Code)
+	}
+	var response struct {
+		Error web.APIError `json:"error"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Error.Code != "invalid_request" {
+		t.Fatalf("error = %#v", response.Error)
+	}
+}
+
+func TestPostCreateRejectsMissingFields(t *testing.T) {
+	body := strings.NewReader(`{"title":"Hello","content_md":"# Hello"}`)
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/posts", body)
+	w := httptest.NewRecorder()
+
+	handler := NewPostHandler(&fakePostSource{})
+	handler.create(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", w.Code)
+	}
+}
+
+func TestPostCreateRejectsWhitespaceOnlyFields(t *testing.T) {
+	body := strings.NewReader(`{"slug":"   ","title":"Hello","content_md":"# Hello"}`)
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/posts", body)
+	w := httptest.NewRecorder()
+
+	handler := NewPostHandler(&fakePostSource{})
+	handler.create(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", w.Code)
+	}
+}
+
+func TestPostCreateRejectsUnknownFields(t *testing.T) {
+	body := strings.NewReader(`{"slug":"hello","title":"Hello","content_md":"# Hello","unexpected":true}`)
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/posts", body)
+	w := httptest.NewRecorder()
+
+	handler := NewPostHandler(&fakePostSource{})
+	handler.create(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", w.Code)
+	}
+}
+
+// Route-level auth tests — go through the chi router so RequireRole is exercised.
+
+func TestPostCreateRoute_Unauthenticated(t *testing.T) {
+	body := strings.NewReader(`{"slug":"a","title":"A","content_md":"# A"}`)
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/posts", body)
+	w := httptest.NewRecorder()
+	apiRouter(&fakePostSource{}).ServeHTTP(w, r)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", w.Code)
+	}
+}
+
+func TestPostCreateRoute_ForbiddenForUser(t *testing.T) {
+	body := strings.NewReader(`{"slug":"a","title":"A","content_md":"# A"}`)
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/posts", body)
+	r = r.WithContext(authmid.WithUser(r.Context(), &auth.User{ID: 1, Role: auth.RoleUser}))
+	w := httptest.NewRecorder()
+	apiRouter(&fakePostSource{}).ServeHTTP(w, r)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", w.Code)
+	}
+}
+
+func TestPostCreateRoute_AdminAllowed(t *testing.T) {
+	publishedAt := time.Date(2026, time.July, 19, 8, 0, 0, 0, time.UTC)
+	source := &fakePostSource{post: &blog.Post{
+		ID: 1, Slug: "a", Title: "A",
+		ContentHTML: "<p>A</p>",
+		PublishedAt: &publishedAt,
+	}}
+	body := strings.NewReader(`{"slug":"a","title":"A","content_md":"# A"}`)
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/posts", body)
+	r = r.WithContext(authmid.WithUser(r.Context(), &auth.User{ID: 1, Role: auth.RoleAdmin}))
+	w := httptest.NewRecorder()
+	apiRouter(source).ServeHTTP(w, r)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", w.Code)
 	}
 }

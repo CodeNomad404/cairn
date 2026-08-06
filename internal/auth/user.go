@@ -5,7 +5,11 @@ import (
 	"time"
 )
 
-const SessionCookie = "cairn_session"
+const (
+	SessionCookie = "cairn_session"
+	RoleAdmin     = "admin"
+	RoleUser      = "user"
+)
 
 // User 对应数据库 users 表
 type User struct {

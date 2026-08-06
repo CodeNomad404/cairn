@@ -8,17 +8,17 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"cairn.cn/internal/auth"
+	"cairn.cn/internal/auth/logic"
 	authmid "cairn.cn/internal/auth/middleware"
-	"cairn.cn/internal/auth/service"
 	"cairn.cn/internal/web"
 )
 
 type AuthHandler struct {
-	svc           *service.AuthService
+	svc           *logic.AuthLogic
 	secureCookies bool
 }
 
-func NewAuthHandler(svc *service.AuthService, secureCookies bool) *AuthHandler {
+func NewAuthHandler(svc *logic.AuthLogic, secureCookies bool) *AuthHandler {
 	return &AuthHandler{svc: svc, secureCookies: secureCookies}
 }
 

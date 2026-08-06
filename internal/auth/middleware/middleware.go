@@ -5,7 +5,8 @@ import (
 	"net/http"
 
 	"cairn.cn/internal/auth"
-	"cairn.cn/internal/auth/service"
+	"cairn.cn/internal/auth/logic"
+	"cairn.cn/internal/web"
 )
 
 type contextKey string
@@ -13,7 +14,7 @@ type contextKey string
 const userKey contextKey = "user"
 
 // LoadUser 在每个请求中注入用户信息
-func LoadUser(svc *service.AuthService) func(http.Handler) http.Handler {
+func LoadUser(svc *logic.AuthLogic) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			cookie, err := r.Cookie(auth.SessionCookie)
@@ -35,4 +36,38 @@ func GetUser(ctx context.Context) *auth.User {
 		return u
 	}
 	return nil
+}
+
+// WithUser returns a child context with the given user set, for testing.
+func WithUser(ctx context.Context, user *auth.User) context.Context {
+	return context.WithValue(ctx, userKey, user)
+}
+
+// RequireUser rejects requests without an authenticated user.
+func RequireUser(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if GetUser(r.Context()) == nil {
+			web.WriteError(w, http.StatusUnauthorized, "unauthorized", "login required")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// RequireRole rejects authenticated users without the required role.
+func RequireRole(role string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			user := GetUser(r.Context())
+			if user == nil {
+				web.WriteError(w, http.StatusUnauthorized, "unauthorized", "login required")
+				return
+			}
+			if user.Role != role {
+				web.WriteError(w, http.StatusForbidden, "forbidden", "insufficient permissions")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }

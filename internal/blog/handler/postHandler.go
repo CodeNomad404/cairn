@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -10,8 +9,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"cairn.cn/internal/auth"
 	authmid "cairn.cn/internal/auth/middleware"
 	"cairn.cn/internal/blog"
+	bloglogic "cairn.cn/internal/blog/logic"
 	"cairn.cn/internal/web"
 )
 
@@ -23,7 +24,7 @@ const (
 type postSource interface {
 	GetBySlug(ctx context.Context, slug string) (*blog.Post, error)
 	ListPublished(ctx context.Context, limit, offset int) ([]blog.Post, error)
-	Publish(ctx context.Context, slug, title, contentMD string) (*blog.Post, error)
+	Publish(ctx context.Context, req *bloglogic.PublishPostRequest) (*blog.Post, error)
 }
 
 // PostHandler exposes blog posts over HTTP.
@@ -38,7 +39,7 @@ func NewPostHandler(posts postSource) *PostHandler {
 func (h *PostHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/posts", h.list)
 	r.Get("/posts/{slug}", h.detail)
-	r.Post("/posts", h.create)
+	r.With(authmid.RequireRole(auth.RoleAdmin)).Post("/posts", h.create)
 }
 
 type postSummary struct {
@@ -60,6 +61,9 @@ type postListResponse struct {
 	HasMore  bool          `json:"has_more"`
 }
 
+/**
+* 文章列表
+ */
 func (h *PostHandler) list(w http.ResponseWriter, r *http.Request) {
 	page, pageSize, ok := pagination(w, r)
 	if !ok {
@@ -108,27 +112,12 @@ func (h *PostHandler) detail(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PostHandler) create(w http.ResponseWriter, r *http.Request) {
-	user := authmid.GetUser(r.Context())
-	if user == nil {
-		web.WriteError(w, http.StatusUnauthorized, "unauthorized", "login required")
-		return
-	}
-	if user.Role != "admin" {
-		web.WriteError(w, http.StatusForbidden, "forbidden", "admin role required")
+	var req bloglogic.PublishPostRequest
+	if !web.DecodeJSON(w, r, &req, 1<<20) || !web.Validate(w, &req) {
 		return
 	}
 
-	var input struct {
-		Slug      string `json:"slug"`
-		Title     string `json:"title"`
-		ContentMD string `json:"content_md"`
-	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&input); err != nil || input.Slug == "" || input.Title == "" || input.ContentMD == "" {
-		web.WriteError(w, http.StatusBadRequest, "invalid_request", "slug, title, and content_md are required")
-		return
-	}
-
-	post, err := h.posts.Publish(r.Context(), input.Slug, input.Title, input.ContentMD)
+	post, err := h.posts.Publish(r.Context(), &req)
 	if err != nil {
 		web.WriteError(w, http.StatusUnprocessableEntity, "invalid_post", err.Error())
 		return
