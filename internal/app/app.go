@@ -12,16 +12,14 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	authhandler "cairn.cn/internal/auth/handler"
-	authlogic "cairn.cn/internal/auth/logic"
 	authmid "cairn.cn/internal/auth/middleware"
 	authrepo "cairn.cn/internal/auth/repository"
 	bloghandler "cairn.cn/internal/blog/handler"
-	bloglogic "cairn.cn/internal/blog/logic"
 	blogrepo "cairn.cn/internal/blog/repository"
 	"cairn.cn/internal/config"
 	"cairn.cn/internal/seo"
+	"cairn.cn/internal/svc"
 	toolhandler "cairn.cn/internal/tool/handler"
-	toollogic "cairn.cn/internal/tool/logic"
 	"cairn.cn/internal/web"
 )
 
@@ -48,6 +46,7 @@ func New(ctx context.Context, logger *slog.Logger) (*App, error) {
 	}
 
 	router := buildRouter(cfg, db)
+	_ = logger
 	return &App{Config: cfg, DB: db, Router: router}, nil
 }
 
@@ -58,21 +57,19 @@ func (a *App) Close() {
 }
 
 func buildRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
-	userRepo := authrepo.NewUserRepo(db)
-	sessionRepo := authrepo.NewSessionRepo(db)
-	authLogic := authlogic.NewAuthLogic(userRepo, sessionRepo)
-	authHandler := authhandler.NewAuthHandler(authLogic, cfg.IsProduction())
+	svcCtx := &svc.ServiceContext{
+		Config:      cfg,
+		PostRepo:    blogrepo.New(db),
+		CommentRepo: blogrepo.NewCommentRepo(db),
+		UserRepo:    authrepo.NewUserRepo(db),
+		SessionRepo: authrepo.NewSessionRepo(db),
+	}
 
-	postRepo := blogrepo.New(db)
-	commentRepo := blogrepo.NewCommentRepo(db)
-	postLogic := bloglogic.NewPostLogic(postRepo)
-	commentLogic := bloglogic.NewCommentLogic(commentRepo)
-	postHandler := bloghandler.NewPostHandler(postLogic)
-	commentHandler := bloghandler.NewCommentHandler(postLogic, commentLogic)
-
-	toolLogic := toollogic.NewJSONLogic()
-	toolHandler := toolhandler.New(toolLogic)
-	seoHandler := seo.New(postLogic)
+	authHandler := authhandler.NewAuthHandler(svcCtx, cfg.IsProduction())
+	postHandler := bloghandler.NewPostHandler(svcCtx)
+	commentHandler := bloghandler.NewCommentHandler(svcCtx)
+	toolHandler := toolhandler.New(svcCtx)
+	seoHandler := seo.New(svcCtx)
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -82,7 +79,7 @@ func buildRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 	r.Use(middleware.Timeout(30 * time.Second))
 	r.Use(web.SecurityHeaders(cfg.IsProduction()))
 	r.Use(web.SameOrigin())
-	r.Use(authmid.LoadUser(authLogic))
+	r.Use(authmid.LoadUser(svcCtx))
 
 	r.Get("/healthz", healthz)
 	seoHandler.RegisterRoutes(r)

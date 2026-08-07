@@ -10,17 +10,17 @@ import (
 	"cairn.cn/internal/blog/logic"
 	"cairn.cn/internal/blog/repository"
 	"cairn.cn/internal/config"
+	"cairn.cn/internal/response"
+	"cairn.cn/internal/svc"
 )
 
 func main() {
-	// 读配置
 	cfg, err := config.Load()
 	if err != nil {
 		slog.Error("load config", "error", err)
 		os.Exit(1)
 	}
 
-	// 连数据库
 	ctx := context.Background()
 	db, err := pgxpool.New(ctx, cfg.Database.DSN())
 	if err != nil {
@@ -29,25 +29,25 @@ func main() {
 	}
 	defer db.Close()
 
-	// 读 Markdown 文件
 	md, err := os.ReadFile("docs/day-one-server-ready.md")
 	if err != nil {
 		slog.Error("read file", "error", err)
 		os.Exit(1)
 	}
 
-	// 插入
-	repo := repository.New(db)
-	svc := logic.NewPostLogic(repo)
-	post, err := svc.Publish(ctx, &logic.PublishPostRequest{
+	svcCtx := &svc.ServiceContext{
+		PostRepo: repository.New(db),
+	}
+	l := logic.NewPostLogic(ctx, svcCtx)
+	_, code, msg := l.Publish(&logic.PublishPostRequest{
 		Slug:      "day-one-server-ready",
 		Title:     "Cairn 的第一天：把服务器搞定了",
 		ContentMD: string(md),
-	})
-	if err != nil {
-		slog.Error("publish", "error", err)
+	}, nil)
+	if code != response.CodeCreated {
+		slog.Error("publish", "code", code, "msg", msg)
 		os.Exit(1)
 	}
 
-	slog.Info("published", "id", post.ID, "slug", post.Slug)
+	slog.Info("published", "slug", "day-one-server-ready")
 }

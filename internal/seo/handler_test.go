@@ -13,26 +13,35 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"cairn.cn/internal/blog"
+	"cairn.cn/internal/svc"
 )
 
-type fakePostSource struct {
+type fakePostRepo struct {
 	posts []blog.Post
 	err   error
 }
 
-func (f fakePostSource) ListPublishedMetadata(context.Context) ([]blog.Post, error) {
+func (f fakePostRepo) Create(context.Context, *blog.Post) error { return nil }
+func (f fakePostRepo) GetBySlug(context.Context, string) (*blog.Post, error) {
+	return nil, nil
+}
+func (f fakePostRepo) ListPublished(context.Context, int, int) ([]blog.Post, error) {
+	return nil, nil
+}
+func (f fakePostRepo) ListPublishedMetadata(context.Context) ([]blog.Post, error) {
 	return f.posts, f.err
 }
 
-func seoRouter(source postSource) http.Handler {
+func seoRouter(repo blog.PostRepo) http.Handler {
 	r := chi.NewRouter()
-	New(source).RegisterRoutes(r)
+	svcCtx := &svc.ServiceContext{PostRepo: repo}
+	New(svcCtx).RegisterRoutes(r)
 	return r
 }
 
 func TestRobots(t *testing.T) {
 	recorder := httptest.NewRecorder()
-	seoRouter(fakePostSource{}).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/robots.txt", nil))
+	seoRouter(fakePostRepo{}).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/robots.txt", nil))
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", recorder.Code)
@@ -48,9 +57,9 @@ func TestRobots(t *testing.T) {
 
 func TestSitemap(t *testing.T) {
 	updatedAt := time.Date(2026, time.July, 5, 2, 3, 4, 0, time.FixedZone("CST", 8*60*60))
-	source := fakePostSource{posts: []blog.Post{{Slug: "go 与 web", UpdatedAt: updatedAt}}}
+	repo := fakePostRepo{posts: []blog.Post{{Slug: "go 与 web", UpdatedAt: updatedAt}}}
 	recorder := httptest.NewRecorder()
-	seoRouter(source).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/sitemap.xml", nil))
+	seoRouter(repo).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/sitemap.xml", nil))
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", recorder.Code)
@@ -90,7 +99,7 @@ func TestSitemap(t *testing.T) {
 
 func TestSitemapDatabaseError(t *testing.T) {
 	recorder := httptest.NewRecorder()
-	seoRouter(fakePostSource{err: errors.New("database unavailable")}).ServeHTTP(
+	seoRouter(fakePostRepo{err: errors.New("database unavailable")}).ServeHTTP(
 		recorder,
 		httptest.NewRequest(http.MethodGet, "/sitemap.xml", nil),
 	)

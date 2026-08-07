@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"time"
 
@@ -10,86 +9,76 @@ import (
 	"cairn.cn/internal/auth"
 	"cairn.cn/internal/auth/logic"
 	authmid "cairn.cn/internal/auth/middleware"
-	"cairn.cn/internal/web"
+	"cairn.cn/internal/request"
+	"cairn.cn/internal/response"
+	"cairn.cn/internal/svc"
 )
 
+// AuthHandler exposes auth endpoints over HTTP.
 type AuthHandler struct {
-	svc           *logic.AuthLogic
+	svcCtx        *svc.ServiceContext
 	secureCookies bool
 }
 
-func NewAuthHandler(svc *logic.AuthLogic, secureCookies bool) *AuthHandler {
-	return &AuthHandler{svc: svc, secureCookies: secureCookies}
+func NewAuthHandler(svcCtx *svc.ServiceContext, secureCookies bool) *AuthHandler {
+	return &AuthHandler{svcCtx: svcCtx, secureCookies: secureCookies}
 }
 
 func (h *AuthHandler) RegisterRoutes(r chi.Router) {
-	r.Post("/register", h.register)
-	r.Post("/login", h.login)
+	r.Post("/register", request.WithValidatedJSON[logic.Credentials](16<<10, h.register))
+	r.Post("/login", request.WithValidatedJSON[logic.Credentials](16<<10, h.login))
 	r.Post("/logout", h.logout)
-	r.Get("/me", h.me)
+	r.With(authmid.RequireUser).Get("/me", h.me)
 }
 
-type credentials struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
+func (h *AuthHandler) register(w http.ResponseWriter, r *http.Request, req *logic.Credentials) {
+	l := logic.NewAuthLogic(r.Context(), h.svcCtx)
+	_, code, msg := l.Register(req)
+	if code != response.CodeSuccess {
+		response.Reply(r.Context(), w, nil, code, msg)
+		return
+	}
+
+	l2 := logic.NewAuthLogic(r.Context(), h.svcCtx)
+	data, code, msg := l2.Login(req)
+	if code != response.CodeSuccess {
+		response.Reply(r.Context(), w, nil, code, msg)
+		return
+	}
+	result := data.(*logic.LoginResult)
+	h.setSessionCookie(w, result.Token)
+	response.Reply(r.Context(), w, result.User, response.CodeCreated, "")
 }
 
-func (h *AuthHandler) register(w http.ResponseWriter, r *http.Request) {
-	input, ok := decodeCredentials(w, r)
-	if !ok {
+func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request, req *logic.Credentials) {
+	l := logic.NewAuthLogic(r.Context(), h.svcCtx)
+	data, code, msg := l.Login(req)
+	if code != response.CodeSuccess {
+		response.Reply(r.Context(), w, nil, code, msg)
 		return
 	}
-	if _, err := h.svc.Register(r.Context(), input.Username, input.Password); err != nil {
-		web.WriteError(w, http.StatusUnprocessableEntity, "registration_failed", err.Error())
-		return
-	}
-	token, user, err := h.svc.Login(r.Context(), input.Username, input.Password)
-	if err != nil {
-		web.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to create session")
-		return
-	}
-	h.setSessionCookie(w, token)
-	web.WriteJSON(w, http.StatusCreated, user)
-}
-
-func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request) {
-	input, ok := decodeCredentials(w, r)
-	if !ok {
-		return
-	}
-	token, user, err := h.svc.Login(r.Context(), input.Username, input.Password)
-	if err != nil {
-		web.WriteError(w, http.StatusUnauthorized, "invalid_credentials", "invalid username or password")
-		return
-	}
-	h.setSessionCookie(w, token)
-	web.WriteJSON(w, http.StatusOK, user)
+	result := data.(*logic.LoginResult)
+	h.setSessionCookie(w, result.Token)
+	response.Reply(r.Context(), w, result.User, response.CodeSuccess, "")
 }
 
 func (h *AuthHandler) logout(w http.ResponseWriter, r *http.Request) {
+	var code response.Code
+	var msg string
 	if cookie, err := r.Cookie(auth.SessionCookie); err == nil {
-		_ = h.svc.Logout(r.Context(), cookie.Value)
+		l := logic.NewAuthLogic(r.Context(), h.svcCtx)
+		_, code, msg = l.Logout(cookie.Value)
 	}
 	h.clearSessionCookie(w)
-	w.WriteHeader(http.StatusNoContent)
+	if code == 0 {
+		code = response.CodeNoContent
+	}
+	response.Reply(r.Context(), w, nil, code, msg)
 }
 
 func (h *AuthHandler) me(w http.ResponseWriter, r *http.Request) {
 	user := authmid.GetUser(r.Context())
-	if user == nil {
-		web.WriteError(w, http.StatusUnauthorized, "unauthorized", "login required")
-		return
-	}
-	web.WriteJSON(w, http.StatusOK, user)
-}
-
-func decodeCredentials(w http.ResponseWriter, r *http.Request) (credentials, bool) {
-	var input credentials
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&input); err != nil {
-		web.WriteError(w, http.StatusBadRequest, "invalid_request", "username and password are required")
-		return credentials{}, false
-	}
-	return input, true
+	response.Reply(r.Context(), w, user, response.CodeSuccess, "")
 }
 
 func (h *AuthHandler) setSessionCookie(w http.ResponseWriter, token string) {

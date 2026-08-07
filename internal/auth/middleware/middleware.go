@@ -5,8 +5,9 @@ import (
 	"net/http"
 
 	"cairn.cn/internal/auth"
-	"cairn.cn/internal/auth/logic"
-	"cairn.cn/internal/web"
+	authlogic "cairn.cn/internal/auth/logic"
+	"cairn.cn/internal/response"
+	"cairn.cn/internal/svc"
 )
 
 type contextKey string
@@ -14,12 +15,13 @@ type contextKey string
 const userKey contextKey = "user"
 
 // LoadUser 在每个请求中注入用户信息
-func LoadUser(svc *logic.AuthLogic) func(http.Handler) http.Handler {
+func LoadUser(svcCtx *svc.ServiceContext) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			cookie, err := r.Cookie(auth.SessionCookie)
 			if err == nil && cookie.Value != "" {
-				user, err := svc.GetUserByToken(r.Context(), cookie.Value)
+				l := authlogic.NewAuthLogic(r.Context(), svcCtx)
+				user, err := l.GetUserByToken(cookie.Value)
 				if err == nil {
 					ctx := context.WithValue(r.Context(), userKey, user)
 					r = r.WithContext(ctx)
@@ -47,7 +49,7 @@ func WithUser(ctx context.Context, user *auth.User) context.Context {
 func RequireUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if GetUser(r.Context()) == nil {
-			web.WriteError(w, http.StatusUnauthorized, "unauthorized", "login required")
+			response.Reply(r.Context(), w, nil, response.CodeUnauthorized, "login required")
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -60,11 +62,11 @@ func RequireRole(role string) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			user := GetUser(r.Context())
 			if user == nil {
-				web.WriteError(w, http.StatusUnauthorized, "unauthorized", "login required")
+				response.Reply(r.Context(), w, nil, response.CodeUnauthorized, "login required")
 				return
 			}
 			if user.Role != role {
-				web.WriteError(w, http.StatusForbidden, "forbidden", "insufficient permissions")
+				response.Reply(r.Context(), w, nil, response.CodeForbidden, "insufficient permissions")
 				return
 			}
 			next.ServeHTTP(w, r)

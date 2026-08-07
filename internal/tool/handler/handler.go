@@ -5,35 +5,27 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"cairn.cn/internal/request"
+	"cairn.cn/internal/response"
+	"cairn.cn/internal/svc"
 	"cairn.cn/internal/tool/logic"
-	"cairn.cn/internal/web"
 )
 
+// Handler exposes tool endpoints over HTTP.
 type Handler struct {
-	jsonSvc *logic.JSONLogic
+	svcCtx *svc.ServiceContext
 }
 
-func New(jsonSvc *logic.JSONLogic) *Handler {
-	return &Handler{jsonSvc: jsonSvc}
+func New(svcCtx *svc.ServiceContext) *Handler {
+	return &Handler{svcCtx: svcCtx}
 }
 
 func (h *Handler) RegisterRoutes(r chi.Router) {
-	r.Post("/tools/json/format", h.format)
+	r.Post("/tools/json/format", request.WithValidatedJSON[logic.FormatJSONRequest](1<<20, h.format))
 }
 
-func (h *Handler) format(w http.ResponseWriter, r *http.Request) {
-	var input struct {
-		Input string `json:"input"`
-	}
-	if !web.DecodeJSON(w, r, &input, 1<<20) {
-		return
-	}
-	formatted, err := h.jsonSvc.Format(input.Input)
-	if err != nil {
-		web.WriteError(w, http.StatusUnprocessableEntity, "invalid_json", err.Error())
-		return
-	}
-	web.WriteJSON(w, http.StatusOK, struct {
-		Formatted string `json:"formatted"`
-	}{Formatted: formatted})
+func (h *Handler) format(w http.ResponseWriter, r *http.Request, req *logic.FormatJSONRequest) {
+	l := logic.NewJSONLogic(r.Context(), h.svcCtx)
+	data, code, msg := l.Format(req.Input)
+	response.Reply(r.Context(), w, data, code, msg)
 }

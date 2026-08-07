@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"context"
-	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -13,33 +11,45 @@ import (
 	authmid "cairn.cn/internal/auth/middleware"
 	"cairn.cn/internal/blog"
 	bloglogic "cairn.cn/internal/blog/logic"
-	"cairn.cn/internal/web"
+	"cairn.cn/internal/request"
+	"cairn.cn/internal/response"
+	"cairn.cn/internal/svc"
 )
 
-const (
-	defaultPageSize = 20
-	maxPageSize     = 100
-)
-
-type postSource interface {
-	GetBySlug(ctx context.Context, slug string) (*blog.Post, error)
-	ListPublished(ctx context.Context, limit, offset int) ([]blog.Post, error)
-	Publish(ctx context.Context, req *bloglogic.PublishPostRequest) (*blog.Post, error)
+// ListPostsRequest holds query parameters for listing posts.
+type ListPostsRequest struct {
+	Page     int
+	PageSize int
 }
 
-// PostHandler exposes blog posts over HTTP.
-type PostHandler struct {
-	posts postSource
-}
+// ParseListPosts extracts and validates pagination query parameters.
+// Missing values default to page=1, page_size=20.
+func ParseListPosts(r *http.Request) (ListPostsRequest, bool) {
+	var req ListPostsRequest
 
-func NewPostHandler(posts postSource) *PostHandler {
-	return &PostHandler{posts: posts}
-}
+	rawPage := r.URL.Query().Get("page")
+	if rawPage == "" {
+		req.Page = 1
+	} else {
+		n, err := strconv.Atoi(rawPage)
+		if err != nil || n < 1 {
+			return req, false
+		}
+		req.Page = n
+	}
 
-func (h *PostHandler) RegisterRoutes(r chi.Router) {
-	r.Get("/posts", h.list)
-	r.Get("/posts/{slug}", h.detail)
-	r.With(authmid.RequireRole(auth.RoleAdmin)).Post("/posts", h.create)
+	rawSize := r.URL.Query().Get("page_size")
+	if rawSize == "" {
+		req.PageSize = 20
+	} else {
+		n, err := strconv.Atoi(rawSize)
+		if err != nil || n < 1 || n > 100 {
+			return req, false
+		}
+		req.PageSize = n
+	}
+
+	return req, true
 }
 
 type postSummary struct {
@@ -54,102 +64,6 @@ type postDetail struct {
 	ContentHTML string `json:"content_html"`
 }
 
-type postListResponse struct {
-	Items    []postSummary `json:"items"`
-	Page     int           `json:"page"`
-	PageSize int           `json:"page_size"`
-	HasMore  bool          `json:"has_more"`
-}
-
-/**
-* 文章列表
- */
-func (h *PostHandler) list(w http.ResponseWriter, r *http.Request) {
-	page, pageSize, ok := pagination(w, r)
-	if !ok {
-		return
-	}
-
-	posts, err := h.posts.ListPublished(r.Context(), pageSize+1, (page-1)*pageSize)
-	if err != nil {
-		web.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to load posts")
-		return
-	}
-
-	hasMore := len(posts) > pageSize
-	if hasMore {
-		posts = posts[:pageSize]
-	}
-
-	items := make([]postSummary, len(posts))
-	for i, post := range posts {
-		items[i] = summary(post)
-	}
-
-	web.WriteJSON(w, http.StatusOK, postListResponse{
-		Items:    items,
-		Page:     page,
-		PageSize: pageSize,
-		HasMore:  hasMore,
-	})
-}
-
-func (h *PostHandler) detail(w http.ResponseWriter, r *http.Request) {
-	post, err := h.posts.GetBySlug(r.Context(), chi.URLParam(r, "slug"))
-	if errors.Is(err, blog.ErrPostNotFound) {
-		web.WriteError(w, http.StatusNotFound, "not_found", "post not found")
-		return
-	}
-	if err != nil {
-		web.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to load post")
-		return
-	}
-
-	web.WriteJSON(w, http.StatusOK, postDetail{
-		postSummary: summary(*post),
-		ContentHTML: post.ContentHTML,
-	})
-}
-
-func (h *PostHandler) create(w http.ResponseWriter, r *http.Request) {
-	var req bloglogic.PublishPostRequest
-	if !web.DecodeJSON(w, r, &req, 1<<20) || !web.Validate(w, &req) {
-		return
-	}
-
-	post, err := h.posts.Publish(r.Context(), &req)
-	if err != nil {
-		web.WriteError(w, http.StatusUnprocessableEntity, "invalid_post", err.Error())
-		return
-	}
-	web.WriteJSON(w, http.StatusCreated, postDetail{postSummary: summary(*post), ContentHTML: post.ContentHTML})
-}
-
-func pagination(w http.ResponseWriter, r *http.Request) (int, int, bool) {
-	page, err := positiveInt(r.URL.Query().Get("page"), 1)
-	if err != nil {
-		web.WriteError(w, http.StatusBadRequest, "invalid_request", "page must be a positive integer")
-		return 0, 0, false
-	}
-	pageSize, err := positiveInt(r.URL.Query().Get("page_size"), defaultPageSize)
-	if err != nil || pageSize > maxPageSize {
-		web.WriteError(w, http.StatusBadRequest, "invalid_request", "page_size must be between 1 and 100")
-		return 0, 0, false
-	}
-	return page, pageSize, true
-}
-
-func positiveInt(raw string, fallback int) (int, error) {
-	if raw == "" {
-		return fallback, nil
-	}
-	value, err := strconv.Atoi(raw)
-	if err != nil || value < 1 {
-		return 0, errors.New("must be positive")
-	}
-	return value, nil
-}
-
 func summary(post blog.Post) postSummary {
 	return postSummary{
 		ID:          post.ID,
@@ -157,4 +71,55 @@ func summary(post blog.Post) postSummary {
 		Title:       post.Title,
 		PublishedAt: post.PublishedAt,
 	}
+}
+
+// PostHandler exposes blog posts over HTTP.
+type PostHandler struct {
+	svcCtx *svc.ServiceContext
+}
+
+func NewPostHandler(svcCtx *svc.ServiceContext) *PostHandler {
+	return &PostHandler{svcCtx: svcCtx}
+}
+
+func (h *PostHandler) RegisterRoutes(r chi.Router) {
+	r.Get("/posts", h.list)
+	r.Get("/posts/{slug}", h.detail)
+	r.With(authmid.RequireRole(auth.RoleAdmin)).
+		Post("/posts", request.WithValidatedJSON[bloglogic.PublishPostRequest](1<<20, h.create))
+}
+
+/**
+* 文章列表
+ */
+func (h *PostHandler) list(w http.ResponseWriter, r *http.Request) {
+	req, ok := ParseListPosts(r)
+	if !ok {
+		response.Reply(r.Context(), w, nil, response.CodeBadRequest, "参数错误")
+		return
+	}
+
+	l := bloglogic.NewPostLogic(r.Context(), h.svcCtx)
+	data, code, msg := l.ListPublished(req.Page, req.PageSize)
+	response.Reply(r.Context(), w, data, code, msg)
+}
+
+func (h *PostHandler) detail(w http.ResponseWriter, r *http.Request) {
+	l := bloglogic.NewPostLogic(r.Context(), h.svcCtx)
+	data, code, msg := l.GetBySlug(chi.URLParam(r, "slug"))
+	if data != nil {
+		post := data.(*blog.Post)
+		data = postDetail{postSummary: summary(*post), ContentHTML: post.ContentHTML}
+	}
+	response.Reply(r.Context(), w, data, code, msg)
+}
+
+func (h *PostHandler) create(w http.ResponseWriter, r *http.Request, req *bloglogic.PublishPostRequest) {
+	l := bloglogic.NewPostLogic(r.Context(), h.svcCtx)
+	data, code, msg := l.Publish(req, authmid.GetUser(r.Context()))
+	if data != nil {
+		post := data.(*blog.Post)
+		data = postDetail{postSummary: summary(*post), ContentHTML: post.ContentHTML}
+	}
+	response.Reply(r.Context(), w, data, code, msg)
 }

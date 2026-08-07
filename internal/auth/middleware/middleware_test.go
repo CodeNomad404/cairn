@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"cairn.cn/internal/auth"
-	"cairn.cn/internal/web"
+	"cairn.cn/internal/response"
 )
 
 func TestRequireRole(t *testing.T) {
@@ -16,10 +16,10 @@ func TestRequireRole(t *testing.T) {
 		name       string
 		user       *auth.User
 		wantStatus int
-		wantCode   string
+		wantCode   int
 	}{
-		{name: "unauthenticated", wantStatus: http.StatusUnauthorized, wantCode: "unauthorized"},
-		{name: "wrong role", user: &auth.User{Role: auth.RoleUser}, wantStatus: http.StatusForbidden, wantCode: "forbidden"},
+		{name: "unauthenticated", wantStatus: http.StatusUnauthorized, wantCode: int(response.CodeUnauthorized)},
+		{name: "wrong role", user: &auth.User{Role: auth.RoleUser}, wantStatus: http.StatusForbidden, wantCode: int(response.CodeForbidden)},
 		{name: "admin", user: &auth.User{Role: auth.RoleAdmin}, wantStatus: http.StatusNoContent},
 	}
 
@@ -38,17 +38,18 @@ func TestRequireRole(t *testing.T) {
 			if recorder.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d", recorder.Code, tt.wantStatus)
 			}
-			if tt.wantCode == "" {
+			if tt.wantCode == 0 {
 				return
 			}
-			var response struct {
-				Error web.APIError `json:"error"`
+			var resp struct {
+				Code    int    `json:"code"`
+				Message string `json:"message,omitempty"`
 			}
-			if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
+			if err := json.NewDecoder(recorder.Body).Decode(&resp); err != nil {
 				t.Fatal(err)
 			}
-			if response.Error.Code != tt.wantCode {
-				t.Fatalf("error code = %q, want %q", response.Error.Code, tt.wantCode)
+			if resp.Code != tt.wantCode {
+				t.Fatalf("error code = %d, want %d", resp.Code, tt.wantCode)
 			}
 		})
 	}

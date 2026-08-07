@@ -16,10 +16,11 @@ import (
 	authmid "cairn.cn/internal/auth/middleware"
 	"cairn.cn/internal/blog"
 	bloglogic "cairn.cn/internal/blog/logic"
-	"cairn.cn/internal/web"
+	"cairn.cn/internal/response"
+	"cairn.cn/internal/svc"
 )
 
-type fakePostSource struct {
+type fakePostRepo struct {
 	posts  []blog.Post
 	post   *blog.Post
 	err    error
@@ -27,34 +28,42 @@ type fakePostSource struct {
 	offset int
 }
 
-func (f *fakePostSource) ListPublished(_ context.Context, limit, offset int) ([]blog.Post, error) {
+func (f *fakePostRepo) Create(_ context.Context, p *blog.Post) error {
+	if f.err != nil {
+		return f.err
+	}
+	if f.post != nil {
+		*p = *f.post
+	}
+	return nil
+}
+func (f *fakePostRepo) GetBySlug(_ context.Context, _ string) (*blog.Post, error) {
+	return f.post, f.err
+}
+func (f *fakePostRepo) ListPublished(_ context.Context, limit, offset int) ([]blog.Post, error) {
 	f.limit = limit
 	f.offset = offset
 	return f.posts, f.err
 }
-
-func (f *fakePostSource) GetBySlug(context.Context, string) (*blog.Post, error) {
-	return f.post, f.err
+func (f *fakePostRepo) ListPublishedMetadata(context.Context) ([]blog.Post, error) {
+	return nil, nil
 }
 
-func (f *fakePostSource) Publish(context.Context, *bloglogic.PublishPostRequest) (*blog.Post, error) {
-	return f.post, f.err
-}
-
-func apiRouter(source *fakePostSource) http.Handler {
+func apiRouter(repo *fakePostRepo) http.Handler {
 	r := chi.NewRouter()
-	r.Route("/api/v1", NewPostHandler(source).RegisterRoutes)
+	svcCtx := &svc.ServiceContext{PostRepo: repo}
+	r.Route("/api/v1", NewPostHandler(svcCtx).RegisterRoutes)
 	return r
 }
 
 func TestPostList(t *testing.T) {
 	publishedAt := time.Date(2026, time.July, 19, 8, 0, 0, 0, time.UTC)
-	source := &fakePostSource{posts: []blog.Post{
+	repo := &fakePostRepo{posts: []blog.Post{
 		{ID: 2, Slug: "second", Title: "Second", PublishedAt: &publishedAt},
 		{ID: 1, Slug: "first", Title: "First", PublishedAt: &publishedAt},
 	}}
 	recorder := httptest.NewRecorder()
-	apiRouter(source).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/posts?page=2&page_size=1", nil))
+	apiRouter(repo).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/posts?page=2&page_size=1", nil))
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", recorder.Code)
@@ -62,43 +71,74 @@ func TestPostList(t *testing.T) {
 	if got := recorder.Header().Get("Content-Type"); got != "application/json; charset=utf-8" {
 		t.Fatalf("Content-Type = %q", got)
 	}
-	if source.limit != 2 || source.offset != 1 {
-		t.Fatalf("pagination = limit %d, offset %d", source.limit, source.offset)
+	if repo.limit != 2 || repo.offset != 1 {
+		t.Fatalf("pagination = limit %d, offset %d", repo.limit, repo.offset)
 	}
 
-	var response postListResponse
-	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
+	var resp struct {
+		Code int `json:"code"`
+		Data struct {
+			Items []struct {
+				Slug string `json:"slug"`
+			} `json:"items"`
+			Page     int  `json:"page"`
+			PageSize int  `json:"page_size"`
+			HasMore  bool `json:"has_more"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(recorder.Body).Decode(&resp); err != nil {
 		t.Fatal(err)
 	}
-	if response.Page != 2 || response.PageSize != 1 || !response.HasMore {
-		t.Fatalf("response pagination = %#v", response)
+	if resp.Code != 0 {
+		t.Fatalf("code = %d", resp.Code)
 	}
-	if len(response.Items) != 1 || response.Items[0].Slug != "second" {
-		t.Fatalf("items = %#v", response.Items)
+	if resp.Data.Page != 2 || resp.Data.PageSize != 1 || !resp.Data.HasMore {
+		t.Fatalf("pagination = %+v", resp.Data)
+	}
+	if len(resp.Data.Items) != 1 || resp.Data.Items[0].Slug != "second" {
+		t.Fatalf("items = %#v", resp.Data.Items)
 	}
 }
 
 func TestPostListRejectsInvalidPage(t *testing.T) {
-	recorder := httptest.NewRecorder()
-	apiRouter(&fakePostSource{}).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/posts?page=0", nil))
+	tests := []struct {
+		name string
+		url  string
+	}{
+		{"zero", "/api/v1/posts?page=0"},
+		{"negative", "/api/v1/posts?page=-1"},
+		{"non-numeric", "/api/v1/posts?page=abc"},
+		{"page_size_zero", "/api/v1/posts?page_size=0"},
+		{"page_size_non_numeric", "/api/v1/posts?page_size=abc"},
+		{"page_size_over_limit", "/api/v1/posts?page_size=101"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			apiRouter(&fakePostRepo{}).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, tt.url, nil))
+			if recorder.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400 (url=%s)", recorder.Code, tt.url)
+			}
+		})
+	}
+}
 
-	if recorder.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400", recorder.Code)
+func TestPostListDefaults(t *testing.T) {
+	repo := &fakePostRepo{}
+	recorder := httptest.NewRecorder()
+	apiRouter(repo).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/posts", nil))
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", recorder.Code)
 	}
-	var response struct {
-		Error web.APIError `json:"error"`
-	}
-	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
-		t.Fatal(err)
-	}
-	if response.Error.Code != "invalid_request" {
-		t.Fatalf("error = %#v", response.Error)
+	if repo.limit != 21 || repo.offset != 0 {
+		t.Fatalf("pagination = limit %d, offset %d (want limit=21 offset=0)", repo.limit, repo.offset)
 	}
 }
 
 func TestPostDetailNotFound(t *testing.T) {
 	recorder := httptest.NewRecorder()
-	apiRouter(&fakePostSource{err: blog.ErrPostNotFound}).ServeHTTP(
+	apiRouter(&fakePostRepo{err: blog.ErrPostNotFound}).ServeHTTP(
 		recorder,
 		httptest.NewRequest(http.MethodGet, "/api/v1/posts/missing", nil),
 	)
@@ -111,7 +151,7 @@ func TestPostDetailNotFound(t *testing.T) {
 func TestPostDetail(t *testing.T) {
 	publishedAt := time.Date(2026, time.July, 19, 8, 0, 0, 0, time.UTC)
 	recorder := httptest.NewRecorder()
-	apiRouter(&fakePostSource{post: &blog.Post{
+	apiRouter(&fakePostRepo{post: &blog.Post{
 		ID:          1,
 		Slug:        "first",
 		Title:       "First",
@@ -122,18 +162,24 @@ func TestPostDetail(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", recorder.Code)
 	}
-	var response postDetail
-	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
+	var resp struct {
+		Code int `json:"code"`
+		Data struct {
+			Slug        string `json:"slug"`
+			ContentHTML string `json:"content_html"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(recorder.Body).Decode(&resp); err != nil {
 		t.Fatal(err)
 	}
-	if response.Slug != "first" || response.ContentHTML != "<p>Hello</p>" {
-		t.Fatalf("response = %#v", response)
+	if resp.Data.Slug != "first" || resp.Data.ContentHTML != "<p>Hello</p>" {
+		t.Fatalf("data = %#v", resp.Data)
 	}
 }
 
 func TestPostDetailDatabaseError(t *testing.T) {
 	recorder := httptest.NewRecorder()
-	apiRouter(&fakePostSource{err: errors.New("database unavailable")}).ServeHTTP(
+	apiRouter(&fakePostRepo{err: errors.New("database unavailable")}).ServeHTTP(
 		recorder,
 		httptest.NewRequest(http.MethodGet, "/api/v1/posts/first", nil),
 	)
@@ -145,7 +191,7 @@ func TestPostDetailDatabaseError(t *testing.T) {
 
 func TestPostCreate(t *testing.T) {
 	publishedAt := time.Date(2026, time.July, 19, 8, 0, 0, 0, time.UTC)
-	source := &fakePostSource{post: &blog.Post{
+	repo := &fakePostRepo{post: &blog.Post{
 		ID:          1,
 		Slug:        "hello",
 		Title:       "Hello",
@@ -156,8 +202,10 @@ func TestPostCreate(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/posts", body)
 	w := httptest.NewRecorder()
 
-	handler := NewPostHandler(source)
-	handler.create(w, r)
+	handler := NewPostHandler(&svc.ServiceContext{PostRepo: repo})
+	handler.create(w, r, &bloglogic.PublishPostRequest{
+		Slug: "hello", Title: "Hello", ContentMD: "# Hello",
+	})
 
 	if w.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want 201", w.Code)
@@ -166,73 +214,22 @@ func TestPostCreate(t *testing.T) {
 		t.Fatalf("Content-Type = %q", got)
 	}
 
-	var response postDetail
-	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+	var resp struct {
+		Code int `json:"code"`
+		Data struct {
+			Slug        string `json:"slug"`
+			ID          int64  `json:"id"`
+			ContentHTML string `json:"content_html"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatal(err)
 	}
-	if response.Slug != "hello" || response.ID != 1 || response.ContentHTML != "<p>Hello</p>" {
-		t.Fatalf("response = %#v", response)
+	if resp.Code != int(response.CodeCreated) {
+		t.Fatalf("code = %d", resp.Code)
 	}
-}
-
-func TestPostCreateRejectsInvalidJSON(t *testing.T) {
-	body := strings.NewReader(`not-json`)
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/posts", body)
-	w := httptest.NewRecorder()
-
-	handler := NewPostHandler(&fakePostSource{})
-	handler.create(w, r)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400", w.Code)
-	}
-	var response struct {
-		Error web.APIError `json:"error"`
-	}
-	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
-		t.Fatal(err)
-	}
-	if response.Error.Code != "invalid_request" {
-		t.Fatalf("error = %#v", response.Error)
-	}
-}
-
-func TestPostCreateRejectsMissingFields(t *testing.T) {
-	body := strings.NewReader(`{"title":"Hello","content_md":"# Hello"}`)
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/posts", body)
-	w := httptest.NewRecorder()
-
-	handler := NewPostHandler(&fakePostSource{})
-	handler.create(w, r)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400", w.Code)
-	}
-}
-
-func TestPostCreateRejectsWhitespaceOnlyFields(t *testing.T) {
-	body := strings.NewReader(`{"slug":"   ","title":"Hello","content_md":"# Hello"}`)
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/posts", body)
-	w := httptest.NewRecorder()
-
-	handler := NewPostHandler(&fakePostSource{})
-	handler.create(w, r)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400", w.Code)
-	}
-}
-
-func TestPostCreateRejectsUnknownFields(t *testing.T) {
-	body := strings.NewReader(`{"slug":"hello","title":"Hello","content_md":"# Hello","unexpected":true}`)
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/posts", body)
-	w := httptest.NewRecorder()
-
-	handler := NewPostHandler(&fakePostSource{})
-	handler.create(w, r)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400", w.Code)
+	if resp.Data.Slug != "hello" || resp.Data.ID != 1 || resp.Data.ContentHTML != "<p>Hello</p>" {
+		t.Fatalf("data = %#v", resp.Data)
 	}
 }
 
@@ -242,7 +239,7 @@ func TestPostCreateRoute_Unauthenticated(t *testing.T) {
 	body := strings.NewReader(`{"slug":"a","title":"A","content_md":"# A"}`)
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/posts", body)
 	w := httptest.NewRecorder()
-	apiRouter(&fakePostSource{}).ServeHTTP(w, r)
+	apiRouter(&fakePostRepo{}).ServeHTTP(w, r)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401", w.Code)
@@ -254,7 +251,7 @@ func TestPostCreateRoute_ForbiddenForUser(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/posts", body)
 	r = r.WithContext(authmid.WithUser(r.Context(), &auth.User{ID: 1, Role: auth.RoleUser}))
 	w := httptest.NewRecorder()
-	apiRouter(&fakePostSource{}).ServeHTTP(w, r)
+	apiRouter(&fakePostRepo{}).ServeHTTP(w, r)
 
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want 403", w.Code)
@@ -263,7 +260,7 @@ func TestPostCreateRoute_ForbiddenForUser(t *testing.T) {
 
 func TestPostCreateRoute_AdminAllowed(t *testing.T) {
 	publishedAt := time.Date(2026, time.July, 19, 8, 0, 0, 0, time.UTC)
-	source := &fakePostSource{post: &blog.Post{
+	repo := &fakePostRepo{post: &blog.Post{
 		ID: 1, Slug: "a", Title: "A",
 		ContentHTML: "<p>A</p>",
 		PublishedAt: &publishedAt,
@@ -272,7 +269,7 @@ func TestPostCreateRoute_AdminAllowed(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/posts", body)
 	r = r.WithContext(authmid.WithUser(r.Context(), &auth.User{ID: 1, Role: auth.RoleAdmin}))
 	w := httptest.NewRecorder()
-	apiRouter(source).ServeHTTP(w, r)
+	apiRouter(repo).ServeHTTP(w, r)
 
 	if w.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want 201", w.Code)
