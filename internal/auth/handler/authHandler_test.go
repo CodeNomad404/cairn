@@ -11,7 +11,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"cairn.cn/internal/auth"
-	authlogic "cairn.cn/internal/auth/logic"
 	"cairn.cn/internal/svc"
 )
 
@@ -51,7 +50,7 @@ func TestLoginSetsCookieAndHidesToken(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/login", body)
 	w := httptest.NewRecorder()
 
-	h.login(w, r, &authlogic.Credentials{Username: "alice", Password: "correct"})
+	h.login(w, r, &LoginRequest{Username: "alice", Password: "correct"})
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", w.Code)

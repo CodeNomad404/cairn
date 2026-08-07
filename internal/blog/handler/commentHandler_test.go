@@ -9,6 +9,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"cairn.cn/internal/auth"
+	authmid "cairn.cn/internal/auth/middleware"
 	"cairn.cn/internal/blog"
 	"cairn.cn/internal/svc"
 )
@@ -40,8 +42,15 @@ func (f *fakeCommentRepo) GetByID(_ context.Context, _ int64) (*blog.Comment, er
 }
 func (f *fakeCommentRepo) Delete(_ context.Context, _ int64) error { return nil }
 
-func commentRouter() http.Handler {
+func commentRouter(user *auth.User) http.Handler {
 	r := chi.NewRouter()
+	if user != nil {
+		r.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				next.ServeHTTP(w, r.WithContext(authmid.WithUser(r.Context(), user)))
+			})
+		})
+	}
 	svcCtx := &svc.ServiceContext{
 		PostRepo:    &fakeCommentPostRepo{},
 		CommentRepo: &fakeCommentRepo{},
@@ -55,9 +64,30 @@ func TestCommentCreateRoute_Unauthenticated(t *testing.T) {
 	body := strings.NewReader(`not-json`)
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/posts/some-slug/comments", body)
 	w := httptest.NewRecorder()
-	commentRouter().ServeHTTP(w, r)
+	commentRouter(nil).ServeHTTP(w, r)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401 (RequireUser must fire before JSON parsing)", w.Code)
+	}
+}
+
+func TestCommentCreateRoute_UserAllowed(t *testing.T) {
+	body := strings.NewReader(`{"content":"hello"}`)
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/posts/some-slug/comments", body)
+	w := httptest.NewRecorder()
+	commentRouter(&auth.User{ID: 7, Role: auth.RoleUser}).ServeHTTP(w, r)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", w.Code)
+	}
+}
+
+func TestCommentDeleteRoute_RejectsInvalidID(t *testing.T) {
+	r := httptest.NewRequest(http.MethodDelete, "/api/v1/comments/invalid", nil)
+	w := httptest.NewRecorder()
+	commentRouter(&auth.User{ID: 7, Role: auth.RoleUser}).ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", w.Code)
 	}
 }

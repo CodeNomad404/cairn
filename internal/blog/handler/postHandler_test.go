@@ -15,9 +15,8 @@ import (
 	"cairn.cn/internal/auth"
 	authmid "cairn.cn/internal/auth/middleware"
 	"cairn.cn/internal/blog"
-	bloglogic "cairn.cn/internal/blog/logic"
-	"cairn.cn/internal/response"
 	"cairn.cn/internal/svc"
+	"cairn.cn/internal/util"
 )
 
 type fakePostRepo struct {
@@ -136,7 +135,7 @@ func TestPostListDefaults(t *testing.T) {
 	}
 }
 
-func TestPostDetailNotFound(t *testing.T) {
+func TestPostGetNotFound(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	apiRouter(&fakePostRepo{err: blog.ErrPostNotFound}).ServeHTTP(
 		recorder,
@@ -148,7 +147,7 @@ func TestPostDetailNotFound(t *testing.T) {
 	}
 }
 
-func TestPostDetail(t *testing.T) {
+func TestPostGet(t *testing.T) {
 	publishedAt := time.Date(2026, time.July, 19, 8, 0, 0, 0, time.UTC)
 	recorder := httptest.NewRecorder()
 	apiRouter(&fakePostRepo{post: &blog.Post{
@@ -177,7 +176,7 @@ func TestPostDetail(t *testing.T) {
 	}
 }
 
-func TestPostDetailDatabaseError(t *testing.T) {
+func TestPostGetDatabaseError(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	apiRouter(&fakePostRepo{err: errors.New("database unavailable")}).ServeHTTP(
 		recorder,
@@ -203,7 +202,7 @@ func TestPostCreate(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	handler := NewPostHandler(&svc.ServiceContext{PostRepo: repo})
-	handler.create(w, r, &bloglogic.PublishPostRequest{
+	handler.create(w, r, &CreatePostRequest{
 		Slug: "hello", Title: "Hello", ContentMD: "# Hello",
 	})
 
@@ -225,7 +224,7 @@ func TestPostCreate(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatal(err)
 	}
-	if resp.Code != int(response.CodeCreated) {
+	if resp.Code != int(util.CodeCreated) {
 		t.Fatalf("code = %d", resp.Code)
 	}
 	if resp.Data.Slug != "hello" || resp.Data.ID != 1 || resp.Data.ContentHTML != "<p>Hello</p>" {

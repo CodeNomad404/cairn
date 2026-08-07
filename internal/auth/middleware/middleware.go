@@ -6,8 +6,8 @@ import (
 
 	"cairn.cn/internal/auth"
 	authlogic "cairn.cn/internal/auth/logic"
-	"cairn.cn/internal/response"
 	"cairn.cn/internal/svc"
+	"cairn.cn/internal/util"
 )
 
 type contextKey string
@@ -49,7 +49,7 @@ func WithUser(ctx context.Context, user *auth.User) context.Context {
 func RequireUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if GetUser(r.Context()) == nil {
-			response.Reply(r.Context(), w, nil, response.CodeUnauthorized, "login required")
+			util.Reply(r.Context(), w, nil, util.CodeUnauthorized, "login required")
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -62,11 +62,11 @@ func RequireRole(role string) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			user := GetUser(r.Context())
 			if user == nil {
-				response.Reply(r.Context(), w, nil, response.CodeUnauthorized, "login required")
+				util.Reply(r.Context(), w, nil, util.CodeUnauthorized, "login required")
 				return
 			}
 			if user.Role != role {
-				response.Reply(r.Context(), w, nil, response.CodeForbidden, "insufficient permissions")
+				util.Reply(r.Context(), w, nil, util.CodeForbidden, "insufficient permissions")
 				return
 			}
 			next.ServeHTTP(w, r)

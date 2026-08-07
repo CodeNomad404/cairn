@@ -10,8 +10,8 @@ import (
 	"cairn.cn/internal/blog/logic"
 	"cairn.cn/internal/blog/repository"
 	"cairn.cn/internal/config"
-	"cairn.cn/internal/response"
 	"cairn.cn/internal/svc"
+	"cairn.cn/internal/util"
 )
 
 func main() {
@@ -39,12 +39,13 @@ func main() {
 		PostRepo: repository.New(db),
 	}
 	l := logic.NewPostLogic(ctx, svcCtx)
-	_, code, msg := l.Publish(&logic.PublishPostRequest{
-		Slug:      "day-one-server-ready",
-		Title:     "Cairn 的第一天：把服务器搞定了",
-		ContentMD: string(md),
-	}, nil)
-	if code != response.CodeCreated {
+	_, code, msg := l.Create(
+		"day-one-server-ready",
+		"Cairn 的第一天：把服务器搞定了",
+		string(md),
+		nil,
+	)
+	if code != util.CodeCreated {
 		slog.Error("publish", "code", code, "msg", msg)
 		os.Exit(1)
 	}
