@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -75,10 +76,22 @@ func TestCommentCreateRoute_UserAllowed(t *testing.T) {
 	body := strings.NewReader(`{"content":"hello"}`)
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/posts/some-slug/comments", body)
 	w := httptest.NewRecorder()
-	commentRouter(&auth.User{ID: 7, Role: auth.RoleUser}).ServeHTTP(w, r)
+	commentRouter(&auth.User{ID: 7, Username: "alice", Role: auth.RoleUser}).ServeHTTP(w, r)
 
 	if w.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want 201", w.Code)
+	}
+	var response struct {
+		Data struct {
+			UserID   int64  `json:"user_id"`
+			Username string `json:"username"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Data.UserID != 7 || response.Data.Username != "alice" {
+		t.Fatalf("data = %#v", response.Data)
 	}
 }
 

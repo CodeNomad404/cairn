@@ -46,9 +46,12 @@ func NewCommentLogic(ctx context.Context, svcCtx *svc.ServiceContext) *CommentLo
 }
 
 // Create 提交一条评论
-func (l *CommentLogic) Create(slug string, parentID *int64, userID int64, content string) (any, util.Code, string) {
+func (l *CommentLogic) Create(slug string, parentID *int64, user *auth.User, content string) (any, util.Code, string) {
 	content = strings.TrimSpace(content)
 
+	if user == nil {
+		return nil, util.CodeUnauthorized, "login required"
+	}
 	if content == "" {
 		return nil, util.CodeBadRequest, "content is required"
 	}
@@ -78,12 +81,13 @@ func (l *CommentLogic) Create(slug string, parentID *int64, userID int64, conten
 	c := &blog.Comment{
 		PostID:   post.ID,
 		ParentID: parentID,
-		UserID:   userID,
+		UserID:   user.ID,
 		Content:  l.policy.Sanitize(content),
 	}
 	if err := l.svcCtx.CommentRepo.Create(l.ctx, c); err != nil {
 		return nil, util.CodeInternalError, "failed to create comment"
 	}
+	c.Username = user.Username
 	return toCommentResult(*c), util.CodeCreated, ""
 }
 

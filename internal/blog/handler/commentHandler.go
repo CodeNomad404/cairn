@@ -46,7 +46,7 @@ func (r CreateCommentRequest) Validate() error {
 // create adds a comment to a blog post.
 func (h *CommentHandler) create(w http.ResponseWriter, r *http.Request, slug string, req *CreateCommentRequest) {
 	l := bloglogic.NewCommentLogic(r.Context(), h.svcCtx)
-	data, code, msg := l.Create(slug, req.ParentID, authmid.GetUser(r.Context()).ID, req.Content)
+	data, code, msg := l.Create(slug, req.ParentID, authmid.GetUser(r.Context()), req.Content)
 	util.Reply(r.Context(), w, data, code, msg)
 }
 
