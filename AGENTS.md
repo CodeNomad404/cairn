@@ -99,8 +99,8 @@ cmd/server/main.go        进程入口 — 启动 HTTP Server、优雅关闭
 cmd/seed/main.go          开发数据初始化
 internal/
   app/                    应用组装（Composition Root）— 创建数据库、Repository、Logic、Handler 和 chi Router
-  auth/                   认证模块 — handler/logic/repository/middleware
-  blog/                   博客模块 — handler/logic/repository
+  auth/                   认证模块 — handler/logic/repository/middleware；model/ 按表拆文件（user.go、session.go）
+  blog/                   博客模块 — handler/logic/repository；model/ 按表拆文件（post.go、comment.go）
   tool/                   工具模块 — handler/logic
   config/                 viper 读取 config.yaml + 环境变量
   httpx/                  JSON HTTP 请求解析、业务码、AppError 和统一 JSON API 响应
@@ -136,7 +136,7 @@ HTTP 请求
 - **Repository**：封装 PostgreSQL 读写，接收 `context.Context`，不处理 HTTP 响应。
 - **app（Composition Root）**：应用启动时创建 Repository、Logic、Handler 并完成组装；Handler 与 Middleware 接收已经创建好的 Logic，请求过程中不创建 Logic。初始化后只读的组件（Goldmark、Bluemonday Policy）只在启动时初始化一次，可安全并发复用。
 - **httpx/response.go**：集中定义业务码、`AppError` 和 `httpx.Reply(ctx, w, data, code, err)`。`AppError` 保存可安全公开的消息和原始 Cause；`Reply` 负责业务码到 HTTP 状态的映射、JSON 信封以及未知错误的 500 兜底。Handler 不自行拼装 JSON 错误响应。
-- **middleware**：只保存与具体业务模块无关的全局 HTTP Middleware（`SecurityHeaders`、`SameOrigin`、`TrustedProxyRealIP`、`RateLimit`）。认证 Middleware（`LoadUser`、`GetUser`、`WithUser`、`RequireUser`、`RequireRole`）依赖认证业务模型、Session 和 `AuthLogic`，继续属于 `auth/middleware`。SEO 使用的固定 canonical 站点 URL（`https://cairn.cn`）是 `seo` 包内私有实现，不属于公共包。
+- **middleware**：只保存与具体业务模块无关的全局 HTTP Middleware（`SecurityHeaders`、`SameOrigin`、`TrustedProxyRealIP`、`RateLimit`）。认证 Middleware（`LoadUser`、`GetPrincipal`、`WithPrincipal`、`RequireUser`、`RequireRole`）依赖认证身份模型 `auth.Principal`、会话模型（`auth/model.Session`）和 `AuthLogic`，继续属于 `auth/middleware`。SEO 使用的固定 canonical 站点 URL（`https://cairn.cn`）是 `seo` 包内私有实现，不属于公共包。
 
 ### JSON API 开发约定
 
@@ -146,11 +146,31 @@ HTTP 请求
 4. 路由只声明路径、HTTP 方法和鉴权中间件，直接注册标准 Handler 方法（`func (h *XxxHandler) method(w http.ResponseWriter, r *http.Request)`）。不使用返回 `http.HandlerFunc` 的解析适配器；Body 大小限制、未知字段检查、尾随数据检查与 `Validate()` 仍由 `ParseBody` 统一处理。
 5. Handler 文件中不得出现 `chi.URLParam`、`r.URL.Query()`、`strconv`、`json.Decoder`、Body 大小限制或分页默认值/范围转换等机械解析代码，这些统一由 `Parse*` 负责。不得新增组合解析函数（如 `ParsePathAndBody`）；类似 `ParseListPosts` 的函数属于 request 层职责，不得放在 Handler。
 6. Handler DTO 的 `Validate()` 只校验 HTTP 输入契约，例如必填、长度、格式和取值范围；权限、数据是否存在、唯一性和状态转换等业务规则仍由 Logic 校验。
-7. 鉴权放在 chi 路由中间件中，不在每个 Handler 里重复检查 `user == nil` 或角色。
+7. 鉴权放在 chi 路由中间件中，不在每个 Handler 里重复检查 `principal == nil` 或角色。
 8. API 输出结构在 Logic 中命名为 `XxxResult`。Logic 负责从数据库模型挑选字段并组装完整 Result；禁止把 Repository 返回的模型直接交给 Handler，禁止在 Handler 中使用 `data.(*Model)` 后再次加工。
 9. Handler 调用 Logic 时使用 `data, code, err := l.Method(...)`，并立即调用 `httpx.Reply(r.Context(), w, data, code, err)`；无数据操作只接收 `code, err` 并传入 `nil` data，Cookie 等必须由 HTTP 层处理的副作用除外。
 10. `healthz`、`robots.txt`、`sitemap.xml` 不是 JSON 业务 API，可按各自协议直接输出原始 JSON、文本或 XML，不强制使用 `httpx.Reply`。
 11. 新模块遵循相同的 `handler/logic/repository` 结构；只在真正需要持久化时增加 Repository。
+
+### 领域模型、认证身份与 API Result 边界
+
+- 持久化模型位于各自模块的 `model` 子包，一张数据库表对应一个生产 model 文件：
+
+```text
+internal/auth/model/
+  user.go       users 表记录模型
+  session.go    sessions 表记录模型
+internal/blog/model/
+  post.go       posts 表记录模型
+  comment.go    comments 表记录模型
+```
+
+  model 文件只保存该表对应的数据结构，只依赖标准库，不声明 JSON 标签，不承担 JSON API 契约。该按表拆文件规则只针对数据库 Model；A11 驳回的是"按接口拆分 Handler 文件"，两者不冲突。
+- Repository 接口（`UserRepo`、`SessionRepo`、`PostRepo`、`CommentRepo`）留在模块根包，方法参数与返回值使用对应 model 包的类型；model 包不定义接口。
+- `auth.Principal`（`ID`、`Username`、`Role`）是认证身份，不属于持久化模型，保留在 `auth` 根包。Request Context 只保存 `Principal`，不保存完整 `User`；`Principal` 只包含认证授权所需的最小字段，不含密码哈希、Session Token 等内部状态，也不承担 API 响应职责。
+- JSON 标签只属于 Handler 中的 Request DTO 和 Logic 中定义的 `XxxResult`。Repository 返回的内部模型只能在 Logic 内部使用，Logic 必须转换成可直接交给 `httpx.Reply` 的 `XxxResult`；Handler 不直接响应内部模型或 `Principal`。
+- 正常认证调用链通过强类型 `UserResult` 等 Result 收紧，Handler 遵守架构约定，并通过精确响应契约测试（data 恰好是约定的字段集合）防止字段意外增加；最终仍需静态检查和 Code Review 把关。
+- Cookie 等 HTTP 副作用仍由 Handler 负责。
 
 **已确定的技术栈**：Go 1.26、`chi`、`pgxpool`、PostgreSQL、`slog`、`viper`、Vue 3、TypeScript、Vue Router、Pinia、Vite、原生 `fetch`、Docker Compose、Caddy。
 

@@ -13,7 +13,7 @@ import (
 	"cairn.cn/internal/httpx"
 )
 
-// PostHandler exposes blog posts over HTTP.
+// PostHandler 通过 HTTP 提供博客文章端点。
 type PostHandler struct {
 	postLogic *bloglogic.PostLogic
 }
@@ -28,7 +28,7 @@ func (h *PostHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/posts/{slug}", h.get)
 }
 
-// CreatePostRequest is the request body for creating a blog post.
+// CreatePostRequest 是创建博客文章的请求体。
 type CreatePostRequest struct {
 	Slug      string `json:"slug"`
 	Title     string `json:"title"`
@@ -48,7 +48,7 @@ func (r CreatePostRequest) Validate() error {
 	return nil
 }
 
-// create adds a blog post.
+// create 创建一篇博客文章。
 func (h *PostHandler) create(w http.ResponseWriter, r *http.Request) {
 	req, err := httpx.ParseBody[CreatePostRequest](w, r, 1<<20)
 	if err != nil {
@@ -59,7 +59,7 @@ func (h *PostHandler) create(w http.ResponseWriter, r *http.Request) {
 	httpx.Reply(r.Context(), w, data, code, err)
 }
 
-// list returns published blog posts.
+// list 返回已发布的博客文章列表。
 func (h *PostHandler) list(w http.ResponseWriter, r *http.Request) {
 	pagination, err := httpx.ParsePagination(r)
 	if err != nil {
@@ -70,7 +70,7 @@ func (h *PostHandler) list(w http.ResponseWriter, r *http.Request) {
 	httpx.Reply(r.Context(), w, data, code, err)
 }
 
-// get returns one blog post by slug.
+// get 按 slug 返回一篇博客文章。
 func (h *PostHandler) get(w http.ResponseWriter, r *http.Request) {
 	slug, err := httpx.ParsePath(r, "slug")
 	if err != nil {

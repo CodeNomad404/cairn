@@ -16,18 +16,19 @@ import (
 	authmid "cairn.cn/internal/auth/middleware"
 	"cairn.cn/internal/blog"
 	bloglogic "cairn.cn/internal/blog/logic"
+	blogmodel "cairn.cn/internal/blog/model"
 	"cairn.cn/internal/httpx"
 )
 
 type fakePostRepo struct {
-	posts  []blog.Post
-	post   *blog.Post
+	posts  []blogmodel.Post
+	post   *blogmodel.Post
 	err    error
 	limit  int
 	offset int
 }
 
-func (f *fakePostRepo) Create(_ context.Context, p *blog.Post) error {
+func (f *fakePostRepo) Create(_ context.Context, p *blogmodel.Post) error {
 	if f.err != nil {
 		return f.err
 	}
@@ -36,15 +37,15 @@ func (f *fakePostRepo) Create(_ context.Context, p *blog.Post) error {
 	}
 	return nil
 }
-func (f *fakePostRepo) GetBySlug(_ context.Context, _ string) (*blog.Post, error) {
+func (f *fakePostRepo) GetBySlug(_ context.Context, _ string) (*blogmodel.Post, error) {
 	return f.post, f.err
 }
-func (f *fakePostRepo) ListPublished(_ context.Context, limit, offset int) ([]blog.Post, error) {
+func (f *fakePostRepo) ListPublished(_ context.Context, limit, offset int) ([]blogmodel.Post, error) {
 	f.limit = limit
 	f.offset = offset
 	return f.posts, f.err
 }
-func (f *fakePostRepo) ListPublishedMetadata(context.Context) ([]blog.Post, error) {
+func (f *fakePostRepo) ListPublishedMetadata(context.Context) ([]blogmodel.Post, error) {
 	return nil, nil
 }
 
@@ -56,7 +57,7 @@ func apiRouter(repo *fakePostRepo) http.Handler {
 
 func TestPostList(t *testing.T) {
 	publishedAt := time.Date(2026, time.July, 19, 8, 0, 0, 0, time.UTC)
-	repo := &fakePostRepo{posts: []blog.Post{
+	repo := &fakePostRepo{posts: []blogmodel.Post{
 		{ID: 2, Slug: "second", Title: "Second", PublishedAt: &publishedAt},
 		{ID: 1, Slug: "first", Title: "First", PublishedAt: &publishedAt},
 	}}
@@ -149,7 +150,7 @@ func TestPostGetNotFound(t *testing.T) {
 func TestPostGet(t *testing.T) {
 	publishedAt := time.Date(2026, time.July, 19, 8, 0, 0, 0, time.UTC)
 	recorder := httptest.NewRecorder()
-	apiRouter(&fakePostRepo{post: &blog.Post{
+	apiRouter(&fakePostRepo{post: &blogmodel.Post{
 		ID:          1,
 		Slug:        "first",
 		Title:       "First",
@@ -189,7 +190,7 @@ func TestPostGetDatabaseError(t *testing.T) {
 
 func TestPostCreate(t *testing.T) {
 	publishedAt := time.Date(2026, time.July, 19, 8, 0, 0, 0, time.UTC)
-	repo := &fakePostRepo{post: &blog.Post{
+	repo := &fakePostRepo{post: &blogmodel.Post{
 		ID:          1,
 		Slug:        "hello",
 		Title:       "Hello",
@@ -229,7 +230,7 @@ func TestPostCreate(t *testing.T) {
 	}
 }
 
-// Route-level auth tests — go through the chi router so RequireRole is exercised.
+// 路由级认证测试——经由 chi 路由器，以实际执行 RequireRole。
 
 func TestPostCreateRoute_Unauthenticated(t *testing.T) {
 	body := strings.NewReader(`{"slug":"a","title":"A","content_md":"# A"}`)
@@ -245,7 +246,7 @@ func TestPostCreateRoute_Unauthenticated(t *testing.T) {
 func TestPostCreateRoute_ForbiddenForUser(t *testing.T) {
 	body := strings.NewReader(`{"slug":"a","title":"A","content_md":"# A"}`)
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/posts", body)
-	r = r.WithContext(authmid.WithUser(r.Context(), &auth.User{ID: 1, Role: auth.RoleUser}))
+	r = r.WithContext(authmid.WithPrincipal(r.Context(), &auth.Principal{ID: 1, Role: auth.RoleUser}))
 	w := httptest.NewRecorder()
 	apiRouter(&fakePostRepo{}).ServeHTTP(w, r)
 
@@ -256,14 +257,14 @@ func TestPostCreateRoute_ForbiddenForUser(t *testing.T) {
 
 func TestPostCreateRoute_AdminAllowed(t *testing.T) {
 	publishedAt := time.Date(2026, time.July, 19, 8, 0, 0, 0, time.UTC)
-	repo := &fakePostRepo{post: &blog.Post{
+	repo := &fakePostRepo{post: &blogmodel.Post{
 		ID: 1, Slug: "a", Title: "A",
 		ContentHTML: "<p>A</p>",
 		PublishedAt: &publishedAt,
 	}}
 	body := strings.NewReader(`{"slug":"a","title":"A","content_md":"# A"}`)
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/posts", body)
-	r = r.WithContext(authmid.WithUser(r.Context(), &auth.User{ID: 1, Role: auth.RoleAdmin}))
+	r = r.WithContext(authmid.WithPrincipal(r.Context(), &auth.Principal{ID: 1, Role: auth.RoleAdmin}))
 	w := httptest.NewRecorder()
 	apiRouter(repo).ServeHTTP(w, r)
 

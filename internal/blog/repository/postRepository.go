@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"cairn.cn/internal/blog"
+	blogmodel "cairn.cn/internal/blog/model"
 )
 
 // PostRepository 负责 posts 表的数据库操作
@@ -23,7 +24,7 @@ func New(db *pgxpool.Pool) *PostRepository {
 }
 
 // Create 插入一篇新文章
-func (r *PostRepository) Create(ctx context.Context, p *blog.Post) error {
+func (r *PostRepository) Create(ctx context.Context, p *blogmodel.Post) error {
 	sql := `INSERT INTO posts (slug, title, content_md, content_html, status, published_at)
 	        VALUES ($1, $2, $3, $4, $5, $6)
 	        RETURNING id, created_at, updated_at`
@@ -33,12 +34,12 @@ func (r *PostRepository) Create(ctx context.Context, p *blog.Post) error {
 }
 
 // GetBySlug 根据 slug 查询一篇文章
-func (r *PostRepository) GetBySlug(ctx context.Context, slug string) (*blog.Post, error) {
+func (r *PostRepository) GetBySlug(ctx context.Context, slug string) (*blogmodel.Post, error) {
 	sql := `SELECT id, slug, title, content_md, content_html, status,
 	               created_at, updated_at, published_at
 	        FROM posts WHERE slug = $1 AND status = 'published'`
 
-	p := &blog.Post{}
+	p := &blogmodel.Post{}
 	var pubAt *time.Time
 	err := r.db.QueryRow(ctx, sql, slug).Scan(
 		&p.ID, &p.Slug, &p.Title, &p.ContentMD, &p.ContentHTML,
@@ -55,7 +56,7 @@ func (r *PostRepository) GetBySlug(ctx context.Context, slug string) (*blog.Post
 }
 
 // ListPublished 返回已发布文章列表，按发布时间倒序
-func (r *PostRepository) ListPublished(ctx context.Context, limit, offset int) ([]blog.Post, error) {
+func (r *PostRepository) ListPublished(ctx context.Context, limit, offset int) ([]blogmodel.Post, error) {
 	sql := `SELECT id, slug, title, content_md, content_html, status,
 	               created_at, updated_at, published_at
 	        FROM posts WHERE status = 'published'
@@ -67,9 +68,9 @@ func (r *PostRepository) ListPublished(ctx context.Context, limit, offset int) (
 	}
 	defer rows.Close()
 
-	var posts []blog.Post
+	var posts []blogmodel.Post
 	for rows.Next() {
-		var p blog.Post
+		var p blogmodel.Post
 		var pubAt *time.Time
 		err := rows.Scan(&p.ID, &p.Slug, &p.Title, &p.ContentMD, &p.ContentHTML,
 			&p.Status, &p.CreatedAt, &p.UpdatedAt, &pubAt)
@@ -83,7 +84,7 @@ func (r *PostRepository) ListPublished(ctx context.Context, limit, offset int) (
 }
 
 // ListPublishedMetadata 返回 Sitemap 所需的最小文章元数据。
-func (r *PostRepository) ListPublishedMetadata(ctx context.Context) ([]blog.Post, error) {
+func (r *PostRepository) ListPublishedMetadata(ctx context.Context) ([]blogmodel.Post, error) {
 	rows, err := r.db.Query(ctx, `SELECT slug, updated_at
 		FROM posts WHERE status = 'published' ORDER BY updated_at DESC`)
 	if err != nil {
@@ -91,9 +92,9 @@ func (r *PostRepository) ListPublishedMetadata(ctx context.Context) ([]blog.Post
 	}
 	defer rows.Close()
 
-	var posts []blog.Post
+	var posts []blogmodel.Post
 	for rows.Next() {
-		var post blog.Post
+		var post blogmodel.Post
 		if err := rows.Scan(&post.Slug, &post.UpdatedAt); err != nil {
 			return nil, err
 		}

@@ -14,7 +14,7 @@ import (
 )
 
 // add
-// AuthHandler exposes auth endpoints over HTTP.
+// AuthHandler 通过 HTTP 提供认证端点。
 type AuthHandler struct {
 	authLogic     *logic.AuthLogic
 	secureCookies bool
@@ -31,7 +31,7 @@ func (h *AuthHandler) RegisterRoutes(r chi.Router) {
 	r.With(authmid.RequireUser).Get("/me", h.me)
 }
 
-// RegisterRequest is the request body for registration.
+// RegisterRequest 是注册的请求体。
 type RegisterRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
@@ -68,7 +68,7 @@ func (h *AuthHandler) register(w http.ResponseWriter, r *http.Request) {
 	httpx.Reply(r.Context(), w, result.User, code, nil)
 }
 
-// LoginRequest is the request body for login.
+// LoginRequest 是登录的请求体。
 type LoginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
@@ -110,6 +110,7 @@ func (h *AuthHandler) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) me(w http.ResponseWriter, r *http.Request) {
-	user := authmid.GetUser(r.Context())
-	httpx.Reply(r.Context(), w, user, httpx.CodeSuccess, nil)
+	principal := authmid.GetPrincipal(r.Context())
+	data, code, err := h.authLogic.Me(r.Context(), principal)
+	httpx.Reply(r.Context(), w, data, code, err)
 }

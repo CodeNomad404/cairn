@@ -17,7 +17,7 @@ func canonicalURL(path string) string {
 	return siteBaseURL + path
 }
 
-// Handler serves SEO endpoints (robots.txt, sitemap.xml).
+// Handler 提供 SEO 端点（robots.txt、sitemap.xml）。
 type Handler struct {
 	postLogic *bloglogic.PostLogic
 }

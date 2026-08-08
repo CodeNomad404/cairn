@@ -12,7 +12,7 @@ import (
 	"cairn.cn/internal/httpx"
 )
 
-// CommentHandler exposes comment endpoints over HTTP.
+// CommentHandler 通过 HTTP 提供评论端点。
 type CommentHandler struct {
 	commentLogic *bloglogic.CommentLogic
 }
@@ -27,7 +27,7 @@ func (h *CommentHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/posts/{slug}/comments", h.list)
 }
 
-// CreateCommentRequest is the request body for creating a comment.
+// CreateCommentRequest 是创建评论的请求体。
 type CreateCommentRequest struct {
 	Content  string `json:"content"`
 	ParentID *int64 `json:"parent_id"`
@@ -40,7 +40,7 @@ func (r CreateCommentRequest) Validate() error {
 	return nil
 }
 
-// create adds a comment to a blog post.
+// create 向博客文章添加一条评论。
 func (h *CommentHandler) create(w http.ResponseWriter, r *http.Request) {
 	slug, err := httpx.ParsePath(r, "slug")
 	if err != nil {
@@ -52,22 +52,22 @@ func (h *CommentHandler) create(w http.ResponseWriter, r *http.Request) {
 		httpx.Reply(r.Context(), w, nil, httpx.CodeBadRequest, err)
 		return
 	}
-	data, code, err := h.commentLogic.Create(r.Context(), slug, req.ParentID, authmid.GetUser(r.Context()), req.Content)
+	data, code, err := h.commentLogic.Create(r.Context(), slug, req.ParentID, authmid.GetPrincipal(r.Context()), req.Content)
 	httpx.Reply(r.Context(), w, data, code, err)
 }
 
-// delete removes a comment.
+// delete 删除一条评论。
 func (h *CommentHandler) delete(w http.ResponseWriter, r *http.Request) {
 	id, err := httpx.ParsePositiveInt64Path(r, "id")
 	if err != nil {
 		httpx.Reply(r.Context(), w, nil, httpx.CodeBadRequest, err)
 		return
 	}
-	code, err := h.commentLogic.Delete(r.Context(), id, authmid.GetUser(r.Context()))
+	code, err := h.commentLogic.Delete(r.Context(), id, authmid.GetPrincipal(r.Context()))
 	httpx.Reply(r.Context(), w, nil, code, err)
 }
 
-// list returns the comments for a blog post.
+// list 返回某篇博客文章的评论。
 func (h *CommentHandler) list(w http.ResponseWriter, r *http.Request) {
 	slug, err := httpx.ParsePath(r, "slug")
 	if err != nil {

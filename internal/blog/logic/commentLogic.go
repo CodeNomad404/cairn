@@ -10,6 +10,7 @@ import (
 
 	"cairn.cn/internal/auth"
 	"cairn.cn/internal/blog"
+	blogmodel "cairn.cn/internal/blog/model"
 	"cairn.cn/internal/httpx"
 )
 
@@ -20,7 +21,7 @@ type CommentLogic struct {
 	policy      *bluemonday.Policy
 }
 
-// CommentResult is the complete API output for one comment.
+// CommentResult 是单条评论的完整 API 输出。
 type CommentResult struct {
 	ID        int64           `json:"id"`
 	PostID    int64           `json:"post_id"`
@@ -33,7 +34,7 @@ type CommentResult struct {
 	Replies   []CommentResult `json:"replies,omitempty"`
 }
 
-// CommentListResult is the complete API output for a comment list.
+// CommentListResult 是评论列表的完整 API 输出。
 type CommentListResult struct {
 	Items []CommentResult `json:"items"`
 }
@@ -46,10 +47,10 @@ func NewCommentLogic(postRepo blog.PostRepo, commentRepo blog.CommentRepo) *Comm
 }
 
 // Create 提交一条评论
-func (l *CommentLogic) Create(ctx context.Context, slug string, parentID *int64, user *auth.User, content string) (CommentResult, httpx.Code, error) {
+func (l *CommentLogic) Create(ctx context.Context, slug string, parentID *int64, principal *auth.Principal, content string) (CommentResult, httpx.Code, error) {
 	content = strings.TrimSpace(content)
 
-	if user == nil {
+	if principal == nil {
 		return CommentResult{}, httpx.CodeUnauthorized, httpx.NewAppError("login required", nil)
 	}
 	if content == "" {
@@ -78,16 +79,16 @@ func (l *CommentLogic) Create(ctx context.Context, slug string, parentID *int64,
 		}
 	}
 
-	c := &blog.Comment{
+	c := &blogmodel.Comment{
 		PostID:   post.ID,
 		ParentID: parentID,
-		UserID:   user.ID,
+		UserID:   principal.ID,
 		Content:  l.policy.Sanitize(content),
 	}
 	if err := l.commentRepo.Create(ctx, c); err != nil {
 		return CommentResult{}, httpx.CodeInternalError, httpx.NewAppError("failed to create comment", err)
 	}
-	c.Username = user.Username
+	c.Username = principal.Username
 	return toCommentResult(*c), httpx.CodeCreated, nil
 }
 
@@ -112,15 +113,15 @@ func (l *CommentLogic) List(ctx context.Context, slug string) (CommentListResult
 }
 
 // Delete 删除一条评论
-func (l *CommentLogic) Delete(ctx context.Context, id int64, user *auth.User) (httpx.Code, error) {
+func (l *CommentLogic) Delete(ctx context.Context, id int64, principal *auth.Principal) (httpx.Code, error) {
 	comment, err := l.commentRepo.GetByID(ctx, id)
 	if err != nil {
 		return httpx.CodeNotFound, httpx.NewAppError("comment not found", err)
 	}
-	if user == nil {
+	if principal == nil {
 		return httpx.CodeUnauthorized, httpx.NewAppError("login required", nil)
 	}
-	if user.Role != auth.RoleAdmin && comment.UserID != user.ID {
+	if principal.Role != auth.RoleAdmin && comment.UserID != principal.ID {
 		return httpx.CodeForbidden, httpx.NewAppError("cannot delete this comment", nil)
 	}
 	if err := l.commentRepo.Delete(ctx, id); err != nil {
@@ -129,7 +130,7 @@ func (l *CommentLogic) Delete(ctx context.Context, id int64, user *auth.User) (h
 	return httpx.CodeNoContent, nil
 }
 
-func toCommentResult(comment blog.Comment) CommentResult {
+func toCommentResult(comment blogmodel.Comment) CommentResult {
 	replies := make([]CommentResult, len(comment.Replies))
 	for i, reply := range comment.Replies {
 		replies[i] = toCommentResult(reply)

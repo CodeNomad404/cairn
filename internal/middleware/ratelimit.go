@@ -13,7 +13,7 @@ type rateLimitEntry struct {
 	resetAt time.Time
 }
 
-// RateLimit limits requests per client IP within a fixed time window.
+// RateLimit 在固定时间窗口内按客户端 IP 限制请求次数。
 func RateLimit(limit int, window time.Duration) func(http.Handler) http.Handler {
 	var mu sync.Mutex
 	entries := make(map[string]rateLimitEntry)

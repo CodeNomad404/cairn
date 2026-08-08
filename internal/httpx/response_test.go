@@ -58,7 +58,7 @@ func TestReply_NoContent(t *testing.T) {
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("status = %d", w.Code)
 	}
-	// NoContent should have no body.
+	// NoContent 不应有响应体。
 	if w.Body.Len() != 0 {
 		t.Fatalf("body should be empty, got %q", w.Body.String())
 	}

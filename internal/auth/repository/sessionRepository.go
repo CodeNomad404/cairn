@@ -6,6 +6,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"cairn.cn/internal/auth"
+	authmodel "cairn.cn/internal/auth/model"
 )
 
 type sessionRepo struct {
@@ -16,7 +17,7 @@ func NewSessionRepo(db *pgxpool.Pool) auth.SessionRepo {
 	return &sessionRepo{db: db}
 }
 
-func (r *sessionRepo) Create(ctx context.Context, s *auth.Session) error {
+func (r *sessionRepo) Create(ctx context.Context, s *authmodel.Session) error {
 	_, err := r.db.Exec(ctx,
 		`INSERT INTO sessions (token, user_id, expires_at) VALUES ($1, $2, $3)`,
 		s.Token, s.UserID, s.ExpiresAt,
@@ -24,8 +25,8 @@ func (r *sessionRepo) Create(ctx context.Context, s *auth.Session) error {
 	return err
 }
 
-func (r *sessionRepo) GetByToken(ctx context.Context, token string) (*auth.Session, error) {
-	s := &auth.Session{}
+func (r *sessionRepo) GetByToken(ctx context.Context, token string) (*authmodel.Session, error) {
+	s := &authmodel.Session{}
 	err := r.db.QueryRow(ctx,
 		`SELECT token, user_id, created_at, expires_at FROM sessions WHERE token = $1`,
 		token,
