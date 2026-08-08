@@ -11,7 +11,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"cairn.cn/internal/auth"
-	"cairn.cn/internal/util"
+	"cairn.cn/internal/httpx"
 )
 
 // AuthLogic 认证相关的业务逻辑
@@ -25,23 +25,23 @@ func NewAuthLogic(userRepo auth.UserRepo, sessionRepo auth.SessionRepo) *AuthLog
 }
 
 // Register 注册新用户。
-func (l *AuthLogic) Register(ctx context.Context, username, password string) (util.Code, error) {
+func (l *AuthLogic) Register(ctx context.Context, username, password string) (httpx.Code, error) {
 	username = strings.TrimSpace(username)
 
 	if len(username) < 2 || len(username) > 64 {
-		return util.CodeBadRequest, util.NewAppError("用户名需要 2–64 个字符", nil)
+		return httpx.CodeBadRequest, httpx.NewAppError("用户名需要 2–64 个字符", nil)
 	}
 	if len(password) < 6 {
-		return util.CodeBadRequest, util.NewAppError("密码至少 6 个字符", nil)
+		return httpx.CodeBadRequest, httpx.NewAppError("密码至少 6 个字符", nil)
 	}
 
 	if existing, _ := l.userRepo.GetByUsername(ctx, username); existing != nil {
-		return util.CodeValidationFailed, util.NewAppError("用户名已被注册", nil)
+		return httpx.CodeValidationFailed, httpx.NewAppError("用户名已被注册", nil)
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return util.CodeInternalError, util.NewAppError("密码加密失败", err)
+		return httpx.CodeInternalError, httpx.NewAppError("密码加密失败", err)
 	}
 
 	u := &auth.User{
@@ -50,9 +50,9 @@ func (l *AuthLogic) Register(ctx context.Context, username, password string) (ut
 		Role:     auth.RoleUser,
 	}
 	if err := l.userRepo.Create(ctx, u); err != nil {
-		return util.CodeInternalError, util.NewAppError("创建用户失败", err)
+		return httpx.CodeInternalError, httpx.NewAppError("创建用户失败", err)
 	}
-	return util.CodeCreated, nil
+	return httpx.CodeCreated, nil
 }
 
 // LoginResult holds the product of a successful login.
@@ -62,25 +62,25 @@ type LoginResult struct {
 }
 
 // Login 验证用户名密码，创建 session.
-func (l *AuthLogic) Login(ctx context.Context, username, password string) (LoginResult, util.Code, error) {
+func (l *AuthLogic) Login(ctx context.Context, username, password string) (LoginResult, httpx.Code, error) {
 	username = strings.TrimSpace(username)
 
 	if username == "" || password == "" {
-		return LoginResult{}, util.CodeBadRequest, util.NewAppError("用户名和密码不能为空", nil)
+		return LoginResult{}, httpx.CodeBadRequest, httpx.NewAppError("用户名和密码不能为空", nil)
 	}
 
 	u, err := l.userRepo.GetByUsername(ctx, username)
 	if err != nil {
-		return LoginResult{}, util.CodeUnauthorized, util.NewAppError("用户名或密码错误", err)
+		return LoginResult{}, httpx.CodeUnauthorized, httpx.NewAppError("用户名或密码错误", err)
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(password)); err != nil {
-		return LoginResult{}, util.CodeUnauthorized, util.NewAppError("用户名或密码错误", err)
+		return LoginResult{}, httpx.CodeUnauthorized, httpx.NewAppError("用户名或密码错误", err)
 	}
 
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
-		return LoginResult{}, util.CodeInternalError, util.NewAppError("生成会话失败", err)
+		return LoginResult{}, httpx.CodeInternalError, httpx.NewAppError("生成会话失败", err)
 	}
 	token := hex.EncodeToString(tokenBytes)
 
@@ -91,18 +91,18 @@ func (l *AuthLogic) Login(ctx context.Context, username, password string) (Login
 		ExpiresAt: time.Now().Add(30 * 24 * time.Hour),
 	}
 	if err := l.sessionRepo.Create(ctx, session); err != nil {
-		return LoginResult{}, util.CodeInternalError, util.NewAppError("创建会话失败", err)
+		return LoginResult{}, httpx.CodeInternalError, httpx.NewAppError("创建会话失败", err)
 	}
 
-	return LoginResult{Token: token, User: u}, util.CodeSuccess, nil
+	return LoginResult{Token: token, User: u}, httpx.CodeSuccess, nil
 }
 
 // Logout 登出，删除 session.
-func (l *AuthLogic) Logout(ctx context.Context, token string) (util.Code, error) {
+func (l *AuthLogic) Logout(ctx context.Context, token string) (httpx.Code, error) {
 	if err := l.sessionRepo.Delete(ctx, token); err != nil {
-		return util.CodeInternalError, util.NewAppError("登出失败", err)
+		return httpx.CodeInternalError, httpx.NewAppError("登出失败", err)
 	}
-	return util.CodeNoContent, nil
+	return httpx.CodeNoContent, nil
 }
 
 // GetUserByToken 通过 session token 获取用户（内部方法，供中间件使用）。

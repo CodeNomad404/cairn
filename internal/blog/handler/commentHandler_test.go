@@ -14,12 +14,16 @@ import (
 	authmid "cairn.cn/internal/auth/middleware"
 	"cairn.cn/internal/blog"
 	bloglogic "cairn.cn/internal/blog/logic"
+	"cairn.cn/internal/httpx"
 )
 
-type fakeCommentPostRepo struct{}
+type fakeCommentPostRepo struct {
+	callCount int
+}
 
 func (f *fakeCommentPostRepo) Create(_ context.Context, _ *blog.Post) error { return nil }
 func (f *fakeCommentPostRepo) GetBySlug(_ context.Context, _ string) (*blog.Post, error) {
+	f.callCount++
 	return &blog.Post{ID: 1}, nil
 }
 func (f *fakeCommentPostRepo) ListPublished(_ context.Context, _ int, _ int) ([]blog.Post, error) {
@@ -99,5 +103,87 @@ func TestCommentDeleteRoute_RejectsInvalidID(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", w.Code)
+	}
+}
+
+// Direct handler tests — call h.create(w, r) like the router does, so parsing
+// order (Path before Body) is exercised without going through chi.
+
+func newCommentHandler() (*CommentHandler, *fakeCommentPostRepo) {
+	repo := &fakeCommentPostRepo{}
+	return NewCommentHandler(bloglogic.NewCommentLogic(repo, &fakeCommentRepo{})), repo
+}
+
+func commentCreateRequest(t *testing.T, slug, body string) *http.Request {
+	t.Helper()
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("slug", slug)
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/posts/some-slug/comments", strings.NewReader(body))
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+	return r.WithContext(authmid.WithUser(r.Context(), &auth.User{ID: 7, Role: auth.RoleUser}))
+}
+
+func TestCommentCreateDirect_ParsesPathThenBody(t *testing.T) {
+	h, repo := newCommentHandler()
+	r := commentCreateRequest(t, "some-slug", `{"content":"hello"}`)
+	w := httptest.NewRecorder()
+
+	h.create(w, r)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", w.Code)
+	}
+	if repo.callCount != 1 {
+		t.Fatalf("logic called %d times, want 1", repo.callCount)
+	}
+}
+
+func TestCommentCreateDirect_MissingSlugSkipsLogic(t *testing.T) {
+	h, repo := newCommentHandler()
+	// Path parsing fails first: even a valid body must not reach Logic.
+	r := commentCreateRequest(t, "   ", `{"content":"hello"}`)
+	w := httptest.NewRecorder()
+
+	h.create(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", w.Code)
+	}
+	var resp struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Code != int(httpx.CodeBadRequest) || resp.Message != "参数错误" {
+		t.Fatalf("response = code %d message %q", resp.Code, resp.Message)
+	}
+	if repo.callCount != 0 {
+		t.Fatalf("logic called %d times, want 0", repo.callCount)
+	}
+}
+
+func TestCommentCreateDirect_BadBodySkipsLogic(t *testing.T) {
+	h, repo := newCommentHandler()
+	r := commentCreateRequest(t, "some-slug", `not-json`)
+	w := httptest.NewRecorder()
+
+	h.create(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", w.Code)
+	}
+	var resp struct {
+		Code int `json:"code"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Code != int(httpx.CodeBadRequest) {
+		t.Fatalf("code = %d, want 400", resp.Code)
+	}
+	if repo.callCount != 0 {
+		t.Fatalf("logic called %d times, want 0", repo.callCount)
 	}
 }

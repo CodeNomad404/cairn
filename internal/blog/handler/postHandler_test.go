@@ -16,7 +16,7 @@ import (
 	authmid "cairn.cn/internal/auth/middleware"
 	"cairn.cn/internal/blog"
 	bloglogic "cairn.cn/internal/blog/logic"
-	"cairn.cn/internal/util"
+	"cairn.cn/internal/httpx"
 )
 
 type fakePostRepo struct {
@@ -201,9 +201,7 @@ func TestPostCreate(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	handler := NewPostHandler(bloglogic.NewPostLogic(repo))
-	handler.create(w, r, &CreatePostRequest{
-		Slug: "hello", Title: "Hello", ContentMD: "# Hello",
-	})
+	handler.create(w, r)
 
 	if w.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want 201", w.Code)
@@ -223,7 +221,7 @@ func TestPostCreate(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatal(err)
 	}
-	if resp.Code != int(util.CodeCreated) {
+	if resp.Code != int(httpx.CodeCreated) {
 		t.Fatalf("code = %d", resp.Code)
 	}
 	if resp.Data.Slug != "hello" || resp.Data.ID != 1 || resp.Data.ContentHTML != "<p>Hello</p>" {

@@ -19,10 +19,10 @@ import (
 	bloglogic "cairn.cn/internal/blog/logic"
 	blogrepo "cairn.cn/internal/blog/repository"
 	"cairn.cn/internal/config"
+	webmw "cairn.cn/internal/middleware"
 	"cairn.cn/internal/seo"
 	toolhandler "cairn.cn/internal/tool/handler"
 	toollogic "cairn.cn/internal/tool/logic"
-	"cairn.cn/internal/web"
 )
 
 type App struct {
@@ -78,18 +78,18 @@ func buildRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
-	r.Use(web.TrustedProxyRealIP())
+	r.Use(webmw.TrustedProxyRealIP())
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
-	r.Use(web.SecurityHeaders(cfg.IsProduction()))
-	r.Use(web.SameOrigin())
+	r.Use(webmw.SecurityHeaders(cfg.IsProduction()))
+	r.Use(webmw.SameOrigin())
 	r.Use(authmid.LoadUser(authLogic))
 
 	r.Get("/healthz", healthz)
 	seoHandler.RegisterRoutes(r)
 	r.Route("/api/v1", func(r chi.Router) {
-		r.With(web.RateLimit(10, time.Minute)).Mount("/auth", authRoutes(authHandler))
+		r.With(webmw.RateLimit(10, time.Minute)).Mount("/auth", authRoutes(authHandler))
 		postHandler.RegisterRoutes(r)
 		commentHandler.RegisterRoutes(r)
 		toolHandler.RegisterRoutes(r)

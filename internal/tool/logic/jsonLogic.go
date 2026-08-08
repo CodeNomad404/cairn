@@ -3,7 +3,7 @@ package logic
 import (
 	"encoding/json"
 
-	"cairn.cn/internal/util"
+	"cairn.cn/internal/httpx"
 )
 
 // JSONLogic JSON 格式化工具的业务逻辑
@@ -19,16 +19,16 @@ func NewJSONLogic() *JSONLogic {
 }
 
 // Format 校验并格式化 JSON
-func (l *JSONLogic) Format(input string) (FormatJSONResult, util.Code, error) {
+func (l *JSONLogic) Format(input string) (FormatJSONResult, httpx.Code, error) {
 	var v any
 	if err := json.Unmarshal([]byte(input), &v); err != nil {
-		return FormatJSONResult{}, util.CodeBadRequest, util.NewAppError("invalid JSON: "+err.Error(), err)
+		return FormatJSONResult{}, httpx.CodeBadRequest, httpx.NewAppError("invalid JSON: "+err.Error(), err)
 	}
 	out, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
-		return FormatJSONResult{}, util.CodeInternalError, util.NewAppError("failed to format JSON", err)
+		return FormatJSONResult{}, httpx.CodeInternalError, httpx.NewAppError("failed to format JSON", err)
 	}
-	return FormatJSONResult{Formatted: string(out)}, util.CodeSuccess, nil
+	return FormatJSONResult{Formatted: string(out)}, httpx.CodeSuccess, nil
 }
 
 // Validate 校验 JSON 是否合法

@@ -10,7 +10,7 @@ import (
 	"cairn.cn/internal/auth"
 	"cairn.cn/internal/auth/logic"
 	authmid "cairn.cn/internal/auth/middleware"
-	"cairn.cn/internal/util"
+	"cairn.cn/internal/httpx"
 )
 
 // add
@@ -25,8 +25,8 @@ func NewAuthHandler(authLogic *logic.AuthLogic, secureCookies bool) *AuthHandler
 }
 
 func (h *AuthHandler) RegisterRoutes(r chi.Router) {
-	r.Post("/register", util.ParseBody[RegisterRequest](16<<10, h.register))
-	r.Post("/login", util.ParseBody[LoginRequest](16<<10, h.login))
+	r.Post("/register", h.register)
+	r.Post("/login", h.login)
 	r.Post("/logout", h.logout)
 	r.With(authmid.RequireUser).Get("/me", h.me)
 }
@@ -47,20 +47,25 @@ func (r RegisterRequest) Validate() error {
 	return nil
 }
 
-func (h *AuthHandler) register(w http.ResponseWriter, r *http.Request, req *RegisterRequest) {
+func (h *AuthHandler) register(w http.ResponseWriter, r *http.Request) {
+	req, err := httpx.ParseBody[RegisterRequest](w, r, 16<<10)
+	if err != nil {
+		httpx.Reply(r.Context(), w, nil, httpx.CodeBadRequest, err)
+		return
+	}
 	code, err := h.authLogic.Register(r.Context(), req.Username, req.Password)
 	if err != nil {
-		util.Reply(r.Context(), w, nil, code, err)
+		httpx.Reply(r.Context(), w, nil, code, err)
 		return
 	}
 
 	result, loginCode, err := h.authLogic.Login(r.Context(), req.Username, req.Password)
 	if err != nil {
-		util.Reply(r.Context(), w, nil, loginCode, err)
+		httpx.Reply(r.Context(), w, nil, loginCode, err)
 		return
 	}
 	h.setSessionCookie(w, result.Token)
-	util.Reply(r.Context(), w, result.User, code, nil)
+	httpx.Reply(r.Context(), w, result.User, code, nil)
 }
 
 // LoginRequest is the request body for login.
@@ -79,27 +84,32 @@ func (r LoginRequest) Validate() error {
 	return nil
 }
 
-func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request, req *LoginRequest) {
+func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request) {
+	req, err := httpx.ParseBody[LoginRequest](w, r, 16<<10)
+	if err != nil {
+		httpx.Reply(r.Context(), w, nil, httpx.CodeBadRequest, err)
+		return
+	}
 	result, code, err := h.authLogic.Login(r.Context(), req.Username, req.Password)
 	if err != nil {
-		util.Reply(r.Context(), w, nil, code, err)
+		httpx.Reply(r.Context(), w, nil, code, err)
 		return
 	}
 	h.setSessionCookie(w, result.Token)
-	util.Reply(r.Context(), w, result.User, code, nil)
+	httpx.Reply(r.Context(), w, result.User, code, nil)
 }
 
 func (h *AuthHandler) logout(w http.ResponseWriter, r *http.Request) {
-	code := util.CodeNoContent
+	code := httpx.CodeNoContent
 	var logoutErr error
 	if cookie, err := r.Cookie(auth.SessionCookie); err == nil {
 		code, logoutErr = h.authLogic.Logout(r.Context(), cookie.Value)
 	}
 	h.clearSessionCookie(w)
-	util.Reply(r.Context(), w, nil, code, logoutErr)
+	httpx.Reply(r.Context(), w, nil, code, logoutErr)
 }
 
 func (h *AuthHandler) me(w http.ResponseWriter, r *http.Request) {
 	user := authmid.GetUser(r.Context())
-	util.Reply(r.Context(), w, user, util.CodeSuccess, nil)
+	httpx.Reply(r.Context(), w, user, httpx.CodeSuccess, nil)
 }

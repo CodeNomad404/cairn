@@ -9,7 +9,7 @@ import (
 
 	authmid "cairn.cn/internal/auth/middleware"
 	bloglogic "cairn.cn/internal/blog/logic"
-	"cairn.cn/internal/util"
+	"cairn.cn/internal/httpx"
 )
 
 // CommentHandler exposes comment endpoints over HTTP.
@@ -22,11 +22,9 @@ func NewCommentHandler(commentLogic *bloglogic.CommentLogic) *CommentHandler {
 }
 
 func (h *CommentHandler) RegisterRoutes(r chi.Router) {
-	r.With(authmid.RequireUser).
-		Post("/posts/{slug}/comments", util.ParsePathAndBody[CreateCommentRequest]("slug", 32<<10, h.create))
-	r.With(authmid.RequireUser).
-		Delete("/comments/{id}", util.ParsePositiveInt64Path("id", h.delete))
-	r.Get("/posts/{slug}/comments", util.ParsePath("slug", h.list))
+	r.With(authmid.RequireUser).Post("/posts/{slug}/comments", h.create)
+	r.With(authmid.RequireUser).Delete("/comments/{id}", h.delete)
+	r.Get("/posts/{slug}/comments", h.list)
 }
 
 // CreateCommentRequest is the request body for creating a comment.
@@ -43,19 +41,39 @@ func (r CreateCommentRequest) Validate() error {
 }
 
 // create adds a comment to a blog post.
-func (h *CommentHandler) create(w http.ResponseWriter, r *http.Request, slug string, req *CreateCommentRequest) {
+func (h *CommentHandler) create(w http.ResponseWriter, r *http.Request) {
+	slug, err := httpx.ParsePath(r, "slug")
+	if err != nil {
+		httpx.Reply(r.Context(), w, nil, httpx.CodeBadRequest, err)
+		return
+	}
+	req, err := httpx.ParseBody[CreateCommentRequest](w, r, 32<<10)
+	if err != nil {
+		httpx.Reply(r.Context(), w, nil, httpx.CodeBadRequest, err)
+		return
+	}
 	data, code, err := h.commentLogic.Create(r.Context(), slug, req.ParentID, authmid.GetUser(r.Context()), req.Content)
-	util.Reply(r.Context(), w, data, code, err)
+	httpx.Reply(r.Context(), w, data, code, err)
 }
 
 // delete removes a comment.
-func (h *CommentHandler) delete(w http.ResponseWriter, r *http.Request, id int64) {
+func (h *CommentHandler) delete(w http.ResponseWriter, r *http.Request) {
+	id, err := httpx.ParsePositiveInt64Path(r, "id")
+	if err != nil {
+		httpx.Reply(r.Context(), w, nil, httpx.CodeBadRequest, err)
+		return
+	}
 	code, err := h.commentLogic.Delete(r.Context(), id, authmid.GetUser(r.Context()))
-	util.Reply(r.Context(), w, nil, code, err)
+	httpx.Reply(r.Context(), w, nil, code, err)
 }
 
 // list returns the comments for a blog post.
-func (h *CommentHandler) list(w http.ResponseWriter, r *http.Request, slug string) {
+func (h *CommentHandler) list(w http.ResponseWriter, r *http.Request) {
+	slug, err := httpx.ParsePath(r, "slug")
+	if err != nil {
+		httpx.Reply(r.Context(), w, nil, httpx.CodeBadRequest, err)
+		return
+	}
 	data, code, err := h.commentLogic.List(r.Context(), slug)
-	util.Reply(r.Context(), w, data, code, err)
+	httpx.Reply(r.Context(), w, data, code, err)
 }
