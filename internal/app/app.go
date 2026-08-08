@@ -12,14 +12,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	authhandler "cairn.cn/internal/auth/handler"
+	authlogic "cairn.cn/internal/auth/logic"
 	authmid "cairn.cn/internal/auth/middleware"
 	authrepo "cairn.cn/internal/auth/repository"
 	bloghandler "cairn.cn/internal/blog/handler"
+	bloglogic "cairn.cn/internal/blog/logic"
 	blogrepo "cairn.cn/internal/blog/repository"
 	"cairn.cn/internal/config"
 	"cairn.cn/internal/seo"
-	"cairn.cn/internal/svc"
 	toolhandler "cairn.cn/internal/tool/handler"
+	toollogic "cairn.cn/internal/tool/logic"
 	"cairn.cn/internal/web"
 )
 
@@ -57,19 +59,22 @@ func (a *App) Close() {
 }
 
 func buildRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
-	svcCtx := &svc.ServiceContext{
-		Config:      cfg,
-		PostRepo:    blogrepo.New(db),
-		CommentRepo: blogrepo.NewCommentRepo(db),
-		UserRepo:    authrepo.NewUserRepo(db),
-		SessionRepo: authrepo.NewSessionRepo(db),
-	}
+	// Composition root：Repository、Logic、Handler 均只组装一次，请求状态只通过 Context 传递。
+	userRepo := authrepo.NewUserRepo(db)
+	sessionRepo := authrepo.NewSessionRepo(db)
+	postRepo := blogrepo.New(db)
+	commentRepo := blogrepo.NewCommentRepo(db)
 
-	authHandler := authhandler.NewAuthHandler(svcCtx, cfg.IsProduction())
-	postHandler := bloghandler.NewPostHandler(svcCtx)
-	commentHandler := bloghandler.NewCommentHandler(svcCtx)
-	toolHandler := toolhandler.New(svcCtx)
-	seoHandler := seo.New(svcCtx)
+	authLogic := authlogic.NewAuthLogic(userRepo, sessionRepo)
+	postLogic := bloglogic.NewPostLogic(postRepo)
+	commentLogic := bloglogic.NewCommentLogic(postRepo, commentRepo)
+	jsonLogic := toollogic.NewJSONLogic()
+
+	authHandler := authhandler.NewAuthHandler(authLogic, cfg.IsProduction())
+	postHandler := bloghandler.NewPostHandler(postLogic)
+	commentHandler := bloghandler.NewCommentHandler(commentLogic)
+	toolHandler := toolhandler.New(jsonLogic)
+	seoHandler := seo.New(postLogic)
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -79,7 +84,7 @@ func buildRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 	r.Use(middleware.Timeout(30 * time.Second))
 	r.Use(web.SecurityHeaders(cfg.IsProduction()))
 	r.Use(web.SameOrigin())
-	r.Use(authmid.LoadUser(svcCtx))
+	r.Use(authmid.LoadUser(authLogic))
 
 	r.Get("/healthz", healthz)
 	seoHandler.RegisterRoutes(r)

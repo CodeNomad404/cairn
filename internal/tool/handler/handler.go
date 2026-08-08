@@ -5,18 +5,17 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"cairn.cn/internal/svc"
 	"cairn.cn/internal/tool/logic"
 	"cairn.cn/internal/util"
 )
 
 // Handler exposes tool endpoints over HTTP.
 type Handler struct {
-	svcCtx *svc.ServiceContext
+	jsonLogic *logic.JSONLogic
 }
 
-func New(svcCtx *svc.ServiceContext) *Handler {
-	return &Handler{svcCtx: svcCtx}
+func New(jsonLogic *logic.JSONLogic) *Handler {
+	return &Handler{jsonLogic: jsonLogic}
 }
 
 func (h *Handler) RegisterRoutes(r chi.Router) {
@@ -33,7 +32,6 @@ func (r FormatJSONRequest) Validate() error {
 }
 
 func (h *Handler) format(w http.ResponseWriter, r *http.Request, req *FormatJSONRequest) {
-	l := logic.NewJSONLogic(h.svcCtx)
-	data, code, msg := l.Format(req.Input)
+	data, code, msg := h.jsonLogic.Format(req.Input)
 	util.Reply(r.Context(), w, data, code, msg)
 }

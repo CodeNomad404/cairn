@@ -13,7 +13,7 @@ import (
 	"cairn.cn/internal/auth"
 	authmid "cairn.cn/internal/auth/middleware"
 	"cairn.cn/internal/blog"
-	"cairn.cn/internal/svc"
+	bloglogic "cairn.cn/internal/blog/logic"
 )
 
 type fakeCommentPostRepo struct{}
@@ -52,11 +52,8 @@ func commentRouter(user *auth.User) http.Handler {
 			})
 		})
 	}
-	svcCtx := &svc.ServiceContext{
-		PostRepo:    &fakeCommentPostRepo{},
-		CommentRepo: &fakeCommentRepo{},
-	}
-	r.Route("/api/v1", NewCommentHandler(svcCtx).RegisterRoutes)
+	commentLogic := bloglogic.NewCommentLogic(&fakeCommentPostRepo{}, &fakeCommentRepo{})
+	r.Route("/api/v1", NewCommentHandler(commentLogic).RegisterRoutes)
 	return r
 }
 

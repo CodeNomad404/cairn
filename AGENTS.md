@@ -98,13 +98,12 @@ Taskfile 快捷命令：`task dev`、`task build`、`task lint`、`task db:up`�
 cmd/server/main.go        进程入口 — 启动 HTTP Server、优雅关闭
 cmd/seed/main.go          开发数据初始化
 internal/
-  app/                    应用组装 — 创建数据库、ServiceContext、Handler 和 chi Router
+  app/                    应用组装（Composition Root）— 创建数据库、Repository、Logic、Handler 和 chi Router
   auth/                   认证模块 — handler/logic/repository/middleware
   blog/                   博客模块 — handler/logic/repository
   tool/                   工具模块 — handler/logic
   config/                 viper 读取 config.yaml + 环境变量
   util/                   通用请求适配器、参数校验调用和统一 JSON API 响应
-  svc/                    ServiceContext 依赖容器
   web/                    HTTP 通用基础设施：安全头、限流、代理 IP、站点 URL
   seo/                    robots.txt 和 sitemap.xml
 web/src/                  Vue 3 + TypeScript 前端
@@ -123,7 +122,7 @@ HTTP 请求
   → 认证/授权 Middleware
   → util 请求适配器（JSON Body、Query、Path）
   → Handler
-  → request-scoped Logic(ctx, svcCtx)
+  → Logic（启动时组装一次，方法显式接收 ctx）
   → Repository
   → PostgreSQL
   → util.Reply
@@ -134,9 +133,9 @@ HTTP 请求
 - **Router**：声明路径、HTTP 方法和中间件顺序。需登录或角色的接口在路由层使用 `RequireUser` / `RequireRole`，使鉴权先于请求体解析执行。
 - **util/request.go**：负责所有 HTTP 输入的机械处理，包括 Body、Query 和 Path 参数的读取、默认值、类型转换、大小限制、未知字段检查、调用 DTO 的 `Validate()`，以及解析失败时写入统一错误响应。成功后通过类型安全的回调进入 Handler。该文件只提供通用解析能力，不定义具体业务接口的 DTO，也不包含业务规则。
 - **Handler**：只允许定义请求 DTO（含 `Validate()`）和 Handler 接口方法。Handler 方法获取 util 层已经解析并校验的类型化参数，只负责取得认证上下文、调用 Logic 和调用 `util.Reply`；不得定义 JSON、Query、Path、分页或类型转换等解析辅助函数，不直接访问数据库，也不接收数据库模型后再组装响应。请求 DTO 及其 `Validate()` 必须与对应接口方法放在同一个 Handler 文件内，并紧挨该接口方法，方便阅读接口时立即看到参数契约。
-- **Logic**：负责业务规则、业务编排以及最终输出数据的组装。Repository 返回的数据库模型只能在 Logic 内部使用；Logic 必须转换成可直接交给 `util.Reply` 的 `XxxResult`。Logic 不保存 `context.Context`；所有需要 Context 的方法都将 `ctx context.Context` 作为第一个参数，并继续传给 Repository。当前构造函数仍接收 `*svc.ServiceContext`，后续按架构整改清单逐步改为精确依赖注入。面向 JSON API Handler 的业务方法暂时统一返回 `(data any, code util.Code, msg string)`，后续按整改清单改为强类型结果和应用错误。
+- **Logic**：负责业务规则、业务编排以及最终输出数据的组装。Repository 返回的数据库模型只能在 Logic 内部使用；Logic 必须转换成可直接交给 `util.Reply` 的 `XxxResult`。Logic 在应用启动时组装一次，构造函数只接收其实际使用的 Repository 接口；不保存 `context.Context`，需要 Context 的方法将 `ctx context.Context` 作为第一个参数并传给 Repository。面向 JSON API Handler 的业务方法统一返回 `(data any, code util.Code, msg string)`。
 - **Repository**：封装 PostgreSQL 读写，接收 `context.Context`，不处理 HTTP 响应。
-- **ServiceContext**：在应用启动时组装配置和 Repository，向 Handler/Logic 提供依赖；不在业务代码中重复创建数据库连接。
+- **app（Composition Root）**：应用启动时创建 Repository、Logic、Handler 并完成组装；Handler 与 Middleware 接收已经创建好的 Logic，请求过程中不创建 Logic。初始化后只读的组件（Goldmark、Bluemonday Policy）只在启动时初始化一次，可安全并发复用。
 - **util/response.go**：`util.Reply(ctx, w, data, code, msg)` 负责业务码到 HTTP 状态的映射和 JSON 信封格式。Handler 不再自行拼装 JSON 错误响应。
 - **web**：仅保留与 HTTP/站点相关的通用基础设施，不放置 JSON 请求解析、参数校验或 API 响应函数。
 

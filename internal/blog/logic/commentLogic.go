@@ -10,14 +10,14 @@ import (
 
 	"cairn.cn/internal/auth"
 	"cairn.cn/internal/blog"
-	"cairn.cn/internal/svc"
 	"cairn.cn/internal/util"
 )
 
 // CommentLogic 评论相关的业务逻辑
 type CommentLogic struct {
-	svcCtx *svc.ServiceContext
-	policy *bluemonday.Policy
+	postRepo    blog.PostRepo
+	commentRepo blog.CommentRepo
+	policy      *bluemonday.Policy
 }
 
 // CommentResult is the complete API output for one comment.
@@ -38,10 +38,11 @@ type CommentListResult struct {
 	Items []CommentResult `json:"items"`
 }
 
-// NewCommentLogic 创建 CommentLogic 实例
-func NewCommentLogic(svcCtx *svc.ServiceContext) *CommentLogic {
+// NewCommentLogic 创建 CommentLogic 实例。
+// Bluemonday Policy 初始化后只读，可安全并发复用，故只在启动时创建一次。
+func NewCommentLogic(postRepo blog.PostRepo, commentRepo blog.CommentRepo) *CommentLogic {
 	policy := bluemonday.StrictPolicy()
-	return &CommentLogic{svcCtx: svcCtx, policy: policy}
+	return &CommentLogic{postRepo: postRepo, commentRepo: commentRepo, policy: policy}
 }
 
 // Create 提交一条评论
@@ -57,7 +58,7 @@ func (l *CommentLogic) Create(ctx context.Context, slug string, parentID *int64,
 	if len(content) > 4000 {
 		return nil, util.CodeBadRequest, "comment cannot exceed 4000 characters"
 	}
-	post, err := l.svcCtx.PostRepo.GetBySlug(ctx, slug)
+	post, err := l.postRepo.GetBySlug(ctx, slug)
 	if errors.Is(err, blog.ErrPostNotFound) {
 		return nil, util.CodeNotFound, "post not found"
 	}
@@ -65,7 +66,7 @@ func (l *CommentLogic) Create(ctx context.Context, slug string, parentID *int64,
 		return nil, util.CodeInternalError, "failed to load post"
 	}
 	if parentID != nil {
-		parent, err := l.svcCtx.CommentRepo.GetByID(ctx, *parentID)
+		parent, err := l.commentRepo.GetByID(ctx, *parentID)
 		if err != nil {
 			return nil, util.CodeValidationFailed, "parent comment not found"
 		}
@@ -83,7 +84,7 @@ func (l *CommentLogic) Create(ctx context.Context, slug string, parentID *int64,
 		UserID:   user.ID,
 		Content:  l.policy.Sanitize(content),
 	}
-	if err := l.svcCtx.CommentRepo.Create(ctx, c); err != nil {
+	if err := l.commentRepo.Create(ctx, c); err != nil {
 		return nil, util.CodeInternalError, "failed to create comment"
 	}
 	c.Username = user.Username
@@ -92,14 +93,14 @@ func (l *CommentLogic) Create(ctx context.Context, slug string, parentID *int64,
 
 // List 取某篇文章的评论
 func (l *CommentLogic) List(ctx context.Context, slug string) (any, util.Code, string) {
-	post, err := l.svcCtx.PostRepo.GetBySlug(ctx, slug)
+	post, err := l.postRepo.GetBySlug(ctx, slug)
 	if errors.Is(err, blog.ErrPostNotFound) {
 		return nil, util.CodeNotFound, "post not found"
 	}
 	if err != nil {
 		return nil, util.CodeInternalError, "failed to load post"
 	}
-	comments, err := l.svcCtx.CommentRepo.ListByPostID(ctx, post.ID)
+	comments, err := l.commentRepo.ListByPostID(ctx, post.ID)
 	if err != nil {
 		return nil, util.CodeInternalError, "failed to load comments"
 	}
@@ -112,7 +113,7 @@ func (l *CommentLogic) List(ctx context.Context, slug string) (any, util.Code, s
 
 // Delete 删除一条评论
 func (l *CommentLogic) Delete(ctx context.Context, id int64, user *auth.User) (any, util.Code, string) {
-	comment, err := l.svcCtx.CommentRepo.GetByID(ctx, id)
+	comment, err := l.commentRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, util.CodeNotFound, "comment not found"
 	}
@@ -122,7 +123,7 @@ func (l *CommentLogic) Delete(ctx context.Context, id int64, user *auth.User) (a
 	if user.Role != auth.RoleAdmin && comment.UserID != user.ID {
 		return nil, util.CodeForbidden, "cannot delete this comment"
 	}
-	if err := l.svcCtx.CommentRepo.Delete(ctx, id); err != nil {
+	if err := l.commentRepo.Delete(ctx, id); err != nil {
 		return nil, util.CodeInternalError, "failed to delete comment"
 	}
 	return nil, util.CodeNoContent, ""

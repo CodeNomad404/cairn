@@ -10,7 +10,6 @@ import (
 	"cairn.cn/internal/blog/logic"
 	"cairn.cn/internal/blog/repository"
 	"cairn.cn/internal/config"
-	"cairn.cn/internal/svc"
 	"cairn.cn/internal/util"
 )
 
@@ -35,16 +34,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	svcCtx := &svc.ServiceContext{
-		PostRepo: repository.New(db),
-	}
-	l := logic.NewPostLogic(svcCtx)
+	l := logic.NewPostLogic(repository.New(db))
 	_, code, msg := l.Create(
 		ctx,
 		"day-one-server-ready",
 		"Cairn 的第一天：把服务器搞定了",
 		string(md),
-		nil,
 	)
 	if code != util.CodeCreated {
 		slog.Error("publish", "code", code, "msg", msg)

@@ -10,17 +10,16 @@ import (
 	"cairn.cn/internal/auth"
 	authmid "cairn.cn/internal/auth/middleware"
 	bloglogic "cairn.cn/internal/blog/logic"
-	"cairn.cn/internal/svc"
 	"cairn.cn/internal/util"
 )
 
 // PostHandler exposes blog posts over HTTP.
 type PostHandler struct {
-	svcCtx *svc.ServiceContext
+	postLogic *bloglogic.PostLogic
 }
 
-func NewPostHandler(svcCtx *svc.ServiceContext) *PostHandler {
-	return &PostHandler{svcCtx: svcCtx}
+func NewPostHandler(postLogic *bloglogic.PostLogic) *PostHandler {
+	return &PostHandler{postLogic: postLogic}
 }
 
 func (h *PostHandler) RegisterRoutes(r chi.Router) {
@@ -52,21 +51,18 @@ func (r CreatePostRequest) Validate() error {
 
 // create adds a blog post.
 func (h *PostHandler) create(w http.ResponseWriter, r *http.Request, req *CreatePostRequest) {
-	l := bloglogic.NewPostLogic(h.svcCtx)
-	data, code, msg := l.Create(r.Context(), req.Slug, req.Title, req.ContentMD, authmid.GetUser(r.Context()))
+	data, code, msg := h.postLogic.Create(r.Context(), req.Slug, req.Title, req.ContentMD)
 	util.Reply(r.Context(), w, data, code, msg)
 }
 
 // list returns published blog posts.
 func (h *PostHandler) list(w http.ResponseWriter, r *http.Request, pagination util.Pagination) {
-	l := bloglogic.NewPostLogic(h.svcCtx)
-	data, code, msg := l.List(r.Context(), pagination.Page, pagination.PageSize)
+	data, code, msg := h.postLogic.List(r.Context(), pagination.Page, pagination.PageSize)
 	util.Reply(r.Context(), w, data, code, msg)
 }
 
 // get returns one blog post by slug.
 func (h *PostHandler) get(w http.ResponseWriter, r *http.Request, slug string) {
-	l := bloglogic.NewPostLogic(h.svcCtx)
-	data, code, msg := l.Get(r.Context(), slug)
+	data, code, msg := h.postLogic.Get(r.Context(), slug)
 	util.Reply(r.Context(), w, data, code, msg)
 }

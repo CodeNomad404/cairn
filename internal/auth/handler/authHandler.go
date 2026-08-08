@@ -10,19 +10,18 @@ import (
 	"cairn.cn/internal/auth"
 	"cairn.cn/internal/auth/logic"
 	authmid "cairn.cn/internal/auth/middleware"
-	"cairn.cn/internal/svc"
 	"cairn.cn/internal/util"
 )
 
 // add
 // AuthHandler exposes auth endpoints over HTTP.
 type AuthHandler struct {
-	svcCtx        *svc.ServiceContext
+	authLogic     *logic.AuthLogic
 	secureCookies bool
 }
 
-func NewAuthHandler(svcCtx *svc.ServiceContext, secureCookies bool) *AuthHandler {
-	return &AuthHandler{svcCtx: svcCtx, secureCookies: secureCookies}
+func NewAuthHandler(authLogic *logic.AuthLogic, secureCookies bool) *AuthHandler {
+	return &AuthHandler{authLogic: authLogic, secureCookies: secureCookies}
 }
 
 func (h *AuthHandler) RegisterRoutes(r chi.Router) {
@@ -49,14 +48,13 @@ func (r RegisterRequest) Validate() error {
 }
 
 func (h *AuthHandler) register(w http.ResponseWriter, r *http.Request, req *RegisterRequest) {
-	l := logic.NewAuthLogic(h.svcCtx)
-	_, code, msg := l.Register(r.Context(), req.Username, req.Password)
+	_, code, msg := h.authLogic.Register(r.Context(), req.Username, req.Password)
 	if code != util.CodeSuccess {
 		util.Reply(r.Context(), w, nil, code, msg)
 		return
 	}
 
-	data, code, msg := l.Login(r.Context(), req.Username, req.Password)
+	data, code, msg := h.authLogic.Login(r.Context(), req.Username, req.Password)
 	if code != util.CodeSuccess {
 		util.Reply(r.Context(), w, nil, code, msg)
 		return
@@ -83,8 +81,7 @@ func (r LoginRequest) Validate() error {
 }
 
 func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request, req *LoginRequest) {
-	l := logic.NewAuthLogic(h.svcCtx)
-	data, code, msg := l.Login(r.Context(), req.Username, req.Password)
+	data, code, msg := h.authLogic.Login(r.Context(), req.Username, req.Password)
 	if code != util.CodeSuccess {
 		util.Reply(r.Context(), w, nil, code, msg)
 		return
@@ -98,8 +95,7 @@ func (h *AuthHandler) logout(w http.ResponseWriter, r *http.Request) {
 	var code util.Code
 	var msg string
 	if cookie, err := r.Cookie(auth.SessionCookie); err == nil {
-		l := logic.NewAuthLogic(h.svcCtx)
-		_, code, msg = l.Logout(r.Context(), cookie.Value)
+		_, code, msg = h.authLogic.Logout(r.Context(), cookie.Value)
 	}
 	h.clearSessionCookie(w)
 	if code == 0 {

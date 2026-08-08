@@ -11,17 +11,17 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"cairn.cn/internal/auth"
-	"cairn.cn/internal/svc"
 	"cairn.cn/internal/util"
 )
 
 // AuthLogic 认证相关的业务逻辑
 type AuthLogic struct {
-	svcCtx *svc.ServiceContext
+	userRepo    auth.UserRepo
+	sessionRepo auth.SessionRepo
 }
 
-func NewAuthLogic(svcCtx *svc.ServiceContext) *AuthLogic {
-	return &AuthLogic{svcCtx: svcCtx}
+func NewAuthLogic(userRepo auth.UserRepo, sessionRepo auth.SessionRepo) *AuthLogic {
+	return &AuthLogic{userRepo: userRepo, sessionRepo: sessionRepo}
 }
 
 // Register 注册新用户，返回创建的用户（不含密码）
@@ -35,7 +35,7 @@ func (l *AuthLogic) Register(ctx context.Context, username, password string) (an
 		return nil, util.CodeBadRequest, "密码至少 6 个字符"
 	}
 
-	if existing, _ := l.svcCtx.UserRepo.GetByUsername(ctx, username); existing != nil {
+	if existing, _ := l.userRepo.GetByUsername(ctx, username); existing != nil {
 		return nil, util.CodeValidationFailed, "用户名已被注册"
 	}
 
@@ -49,7 +49,7 @@ func (l *AuthLogic) Register(ctx context.Context, username, password string) (an
 		Password: string(hash),
 		Role:     auth.RoleUser,
 	}
-	if err := l.svcCtx.UserRepo.Create(ctx, u); err != nil {
+	if err := l.userRepo.Create(ctx, u); err != nil {
 		return nil, util.CodeInternalError, "创建用户失败"
 	}
 	return u, util.CodeSuccess, ""
@@ -69,7 +69,7 @@ func (l *AuthLogic) Login(ctx context.Context, username, password string) (any, 
 		return nil, util.CodeBadRequest, "用户名和密码不能为空"
 	}
 
-	u, err := l.svcCtx.UserRepo.GetByUsername(ctx, username)
+	u, err := l.userRepo.GetByUsername(ctx, username)
 	if err != nil {
 		return nil, util.CodeUnauthorized, "用户名或密码错误"
 	}
@@ -90,7 +90,7 @@ func (l *AuthLogic) Login(ctx context.Context, username, password string) (any, 
 		CreatedAt: time.Now(),
 		ExpiresAt: time.Now().Add(30 * 24 * time.Hour),
 	}
-	if err := l.svcCtx.SessionRepo.Create(ctx, session); err != nil {
+	if err := l.sessionRepo.Create(ctx, session); err != nil {
 		return nil, util.CodeInternalError, "创建会话失败"
 	}
 
@@ -99,7 +99,7 @@ func (l *AuthLogic) Login(ctx context.Context, username, password string) (any, 
 
 // Logout 登出，删除 session.
 func (l *AuthLogic) Logout(ctx context.Context, token string) (any, util.Code, string) {
-	if err := l.svcCtx.SessionRepo.Delete(ctx, token); err != nil {
+	if err := l.sessionRepo.Delete(ctx, token); err != nil {
 		return nil, util.CodeInternalError, "登出失败"
 	}
 	return nil, util.CodeNoContent, ""
@@ -107,13 +107,13 @@ func (l *AuthLogic) Logout(ctx context.Context, token string) (any, util.Code, s
 
 // GetUserByToken 通过 session token 获取用户（内部方法，供中间件使用）。
 func (l *AuthLogic) GetUserByToken(ctx context.Context, token string) (*auth.User, error) {
-	session, err := l.svcCtx.SessionRepo.GetByToken(ctx, token)
+	session, err := l.sessionRepo.GetByToken(ctx, token)
 	if err != nil {
 		return nil, err
 	}
 	if time.Now().After(session.ExpiresAt) {
-		_ = l.svcCtx.SessionRepo.Delete(ctx, token)
+		_ = l.sessionRepo.Delete(ctx, token)
 		return nil, errors.New("会话已过期")
 	}
-	return l.svcCtx.UserRepo.GetByID(ctx, session.UserID)
+	return l.userRepo.GetByID(ctx, session.UserID)
 }

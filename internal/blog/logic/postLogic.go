@@ -14,17 +14,15 @@ import (
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer/html"
 
-	"cairn.cn/internal/auth"
 	"cairn.cn/internal/blog"
-	"cairn.cn/internal/svc"
 	"cairn.cn/internal/util"
 )
 
 // PostLogic 博客文章相关的业务逻辑
 type PostLogic struct {
-	svcCtx *svc.ServiceContext
-	md     goldmark.Markdown
-	policy *bluemonday.Policy
+	postRepo blog.PostRepo
+	md       goldmark.Markdown
+	policy   *bluemonday.Policy
 }
 
 // PostDetailResult is the complete API output for one post.
@@ -52,8 +50,9 @@ type PostListResult struct {
 	HasMore  bool                `json:"has_more"`
 }
 
-// NewPostLogic 创建 PostLogic 实例
-func NewPostLogic(svcCtx *svc.ServiceContext) *PostLogic {
+// NewPostLogic 创建 PostLogic 实例。
+// Goldmark 和 Bluemonday Policy 初始化后只读，可安全并发复用，故只在启动时创建一次。
+func NewPostLogic(postRepo blog.PostRepo) *PostLogic {
 	md := goldmark.New(
 		goldmark.WithExtensions(
 			extension.GFM,
@@ -72,11 +71,11 @@ func NewPostLogic(svcCtx *svc.ServiceContext) *PostLogic {
 		AllowAttrs("class", "style").OnElements("span", "pre", "code").
 		AllowAttrs("id").OnElements("h1", "h2", "h3", "h4", "h5", "h6")
 
-	return &PostLogic{svcCtx: svcCtx, md: md, policy: policy}
+	return &PostLogic{postRepo: postRepo, md: md, policy: policy}
 }
 
 // Create 创建文章：Markdown → HTML → 安全过滤，写入数据库
-func (l *PostLogic) Create(ctx context.Context, slug, title, contentMD string, user *auth.User) (any, util.Code, string) {
+func (l *PostLogic) Create(ctx context.Context, slug, title, contentMD string) (any, util.Code, string) {
 	if strings.TrimSpace(slug) == "" || strings.TrimSpace(title) == "" || strings.TrimSpace(contentMD) == "" {
 		return nil, util.CodeBadRequest, "slug, title, and content_md are required"
 	}
@@ -100,16 +99,15 @@ func (l *PostLogic) Create(ctx context.Context, slug, title, contentMD string, u
 		Status:      "published",
 		PublishedAt: &publishedAt,
 	}
-	if err := l.svcCtx.PostRepo.Create(ctx, p); err != nil {
+	if err := l.postRepo.Create(ctx, p); err != nil {
 		return nil, util.CodeInternalError, "failed to create post"
 	}
-	_ = user // reserved
 	return toPostDetailResult(p), util.CodeCreated, ""
 }
 
 // Get 按 slug 取文章
 func (l *PostLogic) Get(ctx context.Context, slug string) (any, util.Code, string) {
-	post, err := l.svcCtx.PostRepo.GetBySlug(ctx, slug)
+	post, err := l.postRepo.GetBySlug(ctx, slug)
 	if errors.Is(err, blog.ErrPostNotFound) {
 		return nil, util.CodeNotFound, "post not found"
 	}
@@ -125,7 +123,7 @@ func (l *PostLogic) List(ctx context.Context, page, pageSize int) (any, util.Cod
 		return nil, util.CodeBadRequest, "page must be >= 1 and page_size must be between 1 and 100"
 	}
 
-	posts, err := l.svcCtx.PostRepo.ListPublished(ctx, pageSize+1, (page-1)*pageSize)
+	posts, err := l.postRepo.ListPublished(ctx, pageSize+1, (page-1)*pageSize)
 	if err != nil {
 		return nil, util.CodeInternalError, "failed to load posts"
 	}
@@ -160,5 +158,5 @@ func toPostDetailResult(post *blog.Post) PostDetailResult {
 
 // ListPublishedMetadata 返回 Sitemap 所需的最小文章元数据（内部方法）。
 func (l *PostLogic) ListPublishedMetadata(ctx context.Context) ([]blog.Post, error) {
-	return l.svcCtx.PostRepo.ListPublishedMetadata(ctx)
+	return l.postRepo.ListPublishedMetadata(ctx)
 }
