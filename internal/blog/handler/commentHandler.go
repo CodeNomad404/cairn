@@ -1,129 +1,65 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
-	"strconv"
-	"time"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
-	"cairn.cn/internal/auth"
 	authmid "cairn.cn/internal/auth/middleware"
-	"cairn.cn/internal/blog"
-	"cairn.cn/internal/blog/service"
-	"cairn.cn/internal/web"
+	bloglogic "cairn.cn/internal/blog/logic"
+	"cairn.cn/internal/svc"
+	"cairn.cn/internal/util"
 )
 
-// CommentHandler 评论相关的 HTTP 处理器
+// CommentHandler exposes comment endpoints over HTTP.
 type CommentHandler struct {
-	postSvc    *service.PostService
-	commentSvc *service.CommentService
-	r          *web.Renderer
+	svcCtx *svc.ServiceContext
 }
 
-// NewCommentHandler 创建 CommentHandler 实例
-func NewCommentHandler(postSvc *service.PostService, commentSvc *service.CommentService, renderer *web.Renderer) *CommentHandler {
-	return &CommentHandler{postSvc: postSvc, commentSvc: commentSvc, r: renderer}
+func NewCommentHandler(svcCtx *svc.ServiceContext) *CommentHandler {
+	return &CommentHandler{svcCtx: svcCtx}
 }
 
-type commentSection struct {
-	Slug     string
-	Comments []blog.Comment
-	User     *auth.User
-}
-
-// RegisterRoutes 向 chi 路由注册评论相关路由
 func (h *CommentHandler) RegisterRoutes(r chi.Router) {
-	r.With(web.RateLimit(10, time.Minute)).Post("/posts/{slug}/comments", h.create)
-	r.Delete("/comments/{id}", h.delete)
+	r.With(authmid.RequireUser).
+		Post("/posts/{slug}/comments", util.ParsePathAndBody[CreateCommentRequest]("slug", 32<<10, h.create))
+	r.With(authmid.RequireUser).
+		Delete("/comments/{id}", util.ParsePositiveInt64Path("id", h.delete))
+	r.Get("/posts/{slug}/comments", util.ParsePath("slug", h.list))
 }
 
-// create 处理评论提交
-func (h *CommentHandler) create(w http.ResponseWriter, r *http.Request) {
-	user := authmid.GetUser(r.Context())
-	if user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
-		return
-	}
-
-	slug := slugParam(r)
-	post, err := h.postSvc.GetBySlug(r.Context(), slug)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-
-	parentIDStr := r.FormValue("parent_id")
-	var parentID *int64
-	if pid, err := strconv.ParseInt(parentIDStr, 10, 64); err == nil && pid > 0 {
-		parentID = &pid
-	}
-
-	comment, err := h.commentSvc.Create(r.Context(), post.ID, parentID,
-		user.ID,
-		r.FormValue("content"),
-	)
-
-	isHX := r.Header.Get("HX-Request") == "true"
-
-	if err != nil {
-		if isHX {
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			w.WriteHeader(http.StatusUnprocessableEntity)
-			_, _ = w.Write([]byte(`<div class="text-red-600 text-sm mt-2">` + err.Error() + `</div>`))
-			return
-		}
-		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
-		return
-	}
-
-	if isHX {
-		comments, err := h.commentSvc.ListByPostID(r.Context(), post.ID)
-		if err != nil {
-			http.Error(w, "failed to load comments", http.StatusInternalServerError)
-			return
-		}
-		h.r.Render(w, "comment-section", commentSection{
-			Slug:     post.Slug,
-			Comments: comments,
-			User:     user,
-		})
-		return
-	}
-
-	http.Redirect(w, r, "/posts/"+slug+"#comments", http.StatusSeeOther)
-	_ = comment
+// CreateCommentRequest is the request body for creating a comment.
+type CreateCommentRequest struct {
+	Content  string `json:"content"`
+	ParentID *int64 `json:"parent_id"`
 }
 
-// delete 处理评论删除
-func (h *CommentHandler) delete(w http.ResponseWriter, r *http.Request) {
-	user := authmid.GetUser(r.Context())
-	if user == nil {
-		http.Error(w, "login required", http.StatusUnauthorized)
-		return
+func (r CreateCommentRequest) Validate() error {
+	if strings.TrimSpace(r.Content) == "" {
+		return errors.New("content is required")
 	}
+	return nil
+}
 
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
-		return
-	}
+// create adds a comment to a blog post.
+func (h *CommentHandler) create(w http.ResponseWriter, r *http.Request, slug string, req *CreateCommentRequest) {
+	l := bloglogic.NewCommentLogic(r.Context(), h.svcCtx)
+	data, code, msg := l.Create(slug, req.ParentID, authmid.GetUser(r.Context()).ID, req.Content)
+	util.Reply(r.Context(), w, data, code, msg)
+}
 
-	comment, err := h.commentSvc.GetByID(r.Context(), id)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	if user.Role != "admin" && comment.UserID != user.ID {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
-	}
+// delete removes a comment.
+func (h *CommentHandler) delete(w http.ResponseWriter, r *http.Request, id int64) {
+	l := bloglogic.NewCommentLogic(r.Context(), h.svcCtx)
+	data, code, msg := l.Delete(id, authmid.GetUser(r.Context()))
+	util.Reply(r.Context(), w, data, code, msg)
+}
 
-	if err := h.commentSvc.Delete(r.Context(), id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
+// list returns the comments for a blog post.
+func (h *CommentHandler) list(w http.ResponseWriter, r *http.Request, slug string) {
+	l := bloglogic.NewCommentLogic(r.Context(), h.svcCtx)
+	data, code, msg := l.List(slug)
+	util.Reply(r.Context(), w, data, code, msg)
 }

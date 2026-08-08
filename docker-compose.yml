@@ -1,10 +1,9 @@
 services:
   db:
     image: postgres:16
-    restart: unless-stopped
     environment:
       POSTGRES_USER: cairn
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-cairn_dev}
       POSTGRES_DB: cairn
     ports:
       - "127.0.0.1:5432:5432"
@@ -16,5 +15,61 @@ services:
       timeout: 5s
       retries: 5
 
+  migrate:
+    image: cairn-migrate-dev
+    build:
+      context: ./migrations
+      dockerfile: Dockerfile
+    command:
+      - -path=/migrations
+      - -database=postgres://cairn:${DB_PASSWORD:-cairn_dev}@db:5432/cairn?sslmode=disable
+      - up
+    depends_on:
+      db:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    environment:
+      DB_PASSWORD: ${DB_PASSWORD:-cairn_dev}
+      CAIRN_ENVIRONMENT: development
+      CAIRN_SERVER_HOST: 0.0.0.0
+      CAIRN_DATABASE_HOST: db
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - .:/app
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--output-document=-", "http://localhost:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ./web
+      dockerfile: Dockerfile.dev
+    environment:
+      VITE_API_PROXY_TARGET: http://backend:8080
+    ports:
+      - "127.0.0.1:5173:5173"
+    volumes:
+      - ./web:/app
+      - frontend-node-modules:/app/node_modules
+    depends_on:
+      backend:
+        condition: service_healthy
+
 volumes:
   pgdata:
+  go-mod-cache:
+  go-build-cache:
+  frontend-node-modules:

@@ -108,9 +108,9 @@ migrations/               golang-migrate SQL 迁移脚本（空，Phase 2 填）
 docs/                     项目文档 — 决策记录、开发日志、路线图
 ```
 
-**已确定的技术栈**：`chi` 路由、`pgxpool`（直接连 PostgreSQL，没用 `database/sql` 包装层）、`slog`（JSON 格式输出到 stdout）、`viper`（读 config.yaml）、`html/template`（服务端渲染）、Tailwind CSS、HTMX + Alpine.js（Phase 3 开始用）。
+**已确定的技术栈**：Go 1.26、`chi`、`pgxpool`、PostgreSQL、`slog`、`viper`、Vue 3、TypeScript、Vue Router、Pinia、Vite、原生 `fetch`、Docker Compose、Caddy。
 
-**明确不用**：GORM、Gin/Beego/Echo、React/Vue/Next.js、Kubernetes、消息队列、Elasticsearch。完整技术栈和理由见 `docs/blog-project-discussion-2026-05-19.md` 第三节。
+**明确不用**：GORM、Gin/Beego/Echo、React/Next.js、Kubernetes、消息队列、Elasticsearch、Axios、Vuex。
 
 ## 已做的关键决策
 
@@ -121,6 +121,3 @@ docs/                     项目文档 — 决策记录、开发日志、路线�
 | Dockerfile / Caddyfile | 延后到 Phase 7 部署时再写 | diff-05-31 第五节 |
 | CI/CD（GitHub Actions + TCR）| 延后，目前直接 ssh → go build → 重启 | diff-05-31 第六节 |
 | 本地 Go 运行方式 | 裸机直接跑（不用 Docker），air 才能检测文件变化 | diff-05-31 第二节 |
-
-## 技术总结
-当我每学过一个新知识新技术，需要总结成博客文档，放到网站上

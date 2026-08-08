@@ -1,116 +1,113 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
-	"time"
+	"strings"
+
+	"github.com/go-chi/chi/v5"
 
 	"cairn.cn/internal/auth"
-	"cairn.cn/internal/auth/service"
-	"cairn.cn/internal/web"
+	"cairn.cn/internal/auth/logic"
+	authmid "cairn.cn/internal/auth/middleware"
+	"cairn.cn/internal/svc"
+	"cairn.cn/internal/util"
 )
 
-// AuthHandler 认证相关的 HTTP 处理器
+// AuthHandler exposes auth endpoints over HTTP.
 type AuthHandler struct {
-	svc           *service.AuthService
-	r             *web.Renderer
+	svcCtx        *svc.ServiceContext
 	secureCookies bool
 }
 
-func New(svc *service.AuthService, renderer *web.Renderer, secureCookies bool) *AuthHandler {
-	return &AuthHandler{svc: svc, r: renderer, secureCookies: secureCookies}
+func NewAuthHandler(svcCtx *svc.ServiceContext, secureCookies bool) *AuthHandler {
+	return &AuthHandler{svcCtx: svcCtx, secureCookies: secureCookies}
 }
 
-type authPage struct {
-	web.PageData
-	Error string
+func (h *AuthHandler) RegisterRoutes(r chi.Router) {
+	r.Post("/register", util.ParseBody[RegisterRequest](16<<10, h.register))
+	r.Post("/login", util.ParseBody[LoginRequest](16<<10, h.login))
+	r.Post("/logout", h.logout)
+	r.With(authmid.RequireUser).Get("/me", h.me)
 }
 
-// LoginPage 登录页面 GET
-func (h *AuthHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
-	h.r.Render(w, "login", authPage{
-		PageData: web.PrivatePageData("登录 — Cairn"),
-	})
+// RegisterRequest is the request body for registration.
+type RegisterRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
-// Login 处理登录 POST
-func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
-	username := r.FormValue("username")
-	password := r.FormValue("password")
+func (r RegisterRequest) Validate() error {
+	if strings.TrimSpace(r.Username) == "" {
+		return errors.New("username is required")
+	}
+	if r.Password == "" {
+		return errors.New("password is required")
+	}
+	return nil
+}
 
-	token, _, err := h.svc.Login(r.Context(), username, password)
-	if err != nil {
-		h.r.RenderStatus(w, http.StatusUnprocessableEntity, "login", authPage{
-			PageData: web.PrivatePageData("登录 — Cairn"),
-			Error:    err.Error(),
-		})
+func (h *AuthHandler) register(w http.ResponseWriter, r *http.Request, req *RegisterRequest) {
+	l := logic.NewAuthLogic(r.Context(), h.svcCtx)
+	_, code, msg := l.Register(req.Username, req.Password)
+	if code != util.CodeSuccess {
+		util.Reply(r.Context(), w, nil, code, msg)
 		return
 	}
 
-	h.setSessionCookie(w, token)
-	http.Redirect(w, r, "/", http.StatusSeeOther)
-}
-
-// RegisterPage 注册页面 GET
-func (h *AuthHandler) RegisterPage(w http.ResponseWriter, r *http.Request) {
-	h.r.Render(w, "register", authPage{
-		PageData: web.PrivatePageData("注册 — Cairn"),
-	})
-}
-
-// Register 处理注册 POST
-func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
-	username := r.FormValue("username")
-	password := r.FormValue("password")
-
-	_, err := h.svc.Register(r.Context(), username, password)
-	if err != nil {
-		h.r.RenderStatus(w, http.StatusUnprocessableEntity, "register", authPage{
-			PageData: web.PrivatePageData("注册 — Cairn"),
-			Error:    err.Error(),
-		})
+	data, code, msg := l.Login(req.Username, req.Password)
+	if code != util.CodeSuccess {
+		util.Reply(r.Context(), w, nil, code, msg)
 		return
 	}
-
-	// 注册成功后自动登录
-	token, _, err := h.svc.Login(r.Context(), username, password)
-	if err != nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
-		return
-	}
-
-	h.setSessionCookie(w, token)
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	result := data.(*logic.LoginResult)
+	h.setSessionCookie(w, result.Token)
+	util.Reply(r.Context(), w, result.User, util.CodeCreated, "")
 }
 
-// Logout 处理登出 POST
-func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+// LoginRequest is the request body for login.
+type LoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+func (r LoginRequest) Validate() error {
+	if strings.TrimSpace(r.Username) == "" {
+		return errors.New("username is required")
+	}
+	if r.Password == "" {
+		return errors.New("password is required")
+	}
+	return nil
+}
+
+func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request, req *LoginRequest) {
+	l := logic.NewAuthLogic(r.Context(), h.svcCtx)
+	data, code, msg := l.Login(req.Username, req.Password)
+	if code != util.CodeSuccess {
+		util.Reply(r.Context(), w, nil, code, msg)
+		return
+	}
+	result := data.(*logic.LoginResult)
+	h.setSessionCookie(w, result.Token)
+	util.Reply(r.Context(), w, result.User, util.CodeSuccess, "")
+}
+
+func (h *AuthHandler) logout(w http.ResponseWriter, r *http.Request) {
+	var code util.Code
+	var msg string
 	if cookie, err := r.Cookie(auth.SessionCookie); err == nil {
-		_ = h.svc.Logout(r.Context(), cookie.Value)
+		l := logic.NewAuthLogic(r.Context(), h.svcCtx)
+		_, code, msg = l.Logout(cookie.Value)
 	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     auth.SessionCookie,
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   h.secureCookies,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   -1,
-		Expires:  time.Unix(1, 0),
-	})
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	h.clearSessionCookie(w)
+	if code == 0 {
+		code = util.CodeNoContent
+	}
+	util.Reply(r.Context(), w, nil, code, msg)
 }
 
-func (h *AuthHandler) setSessionCookie(w http.ResponseWriter, token string) {
-	const sessionDuration = 30 * 24 * time.Hour
-	http.SetCookie(w, &http.Cookie{
-		Name:     auth.SessionCookie,
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   h.secureCookies,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   int(sessionDuration.Seconds()),
-		Expires:  time.Now().Add(sessionDuration),
-	})
+func (h *AuthHandler) me(w http.ResponseWriter, r *http.Request) {
+	user := authmid.GetUser(r.Context())
+	util.Reply(r.Context(), w, user, util.CodeSuccess, "")
 }

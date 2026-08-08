@@ -1,0 +1,158 @@
+openapi: 3.1.0
+info:
+  title: Cairn API
+  version: 1.0.0
+servers:
+  - url: /api/v1
+paths:
+  /auth/register:
+    post:
+      summary: Register and create a session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Credentials' }
+      responses:
+        '201': { description: Registered user and session cookie, content: { application/json: { schema: { $ref: '#/components/schemas/User' } } } }
+  /auth/login:
+    post:
+      summary: Login and create a session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Credentials' }
+      responses:
+        '200': { description: Logged-in user and session cookie, content: { application/json: { schema: { $ref: '#/components/schemas/User' } } } }
+  /auth/logout:
+    post:
+      summary: End the current session
+      responses:
+        '204': { description: Logged out }
+  /auth/me:
+    get:
+      summary: Get the current user
+      responses:
+        '200': { description: Current user, content: { application/json: { schema: { $ref: '#/components/schemas/User' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /posts:
+    get:
+      summary: List published posts
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: page_size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200': { description: Published posts, content: { application/json: { schema: { $ref: '#/components/schemas/PostList' } } } }
+    post:
+      summary: Publish a post (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PostInput' }
+      responses:
+        '201': { description: Published post, content: { application/json: { schema: { $ref: '#/components/schemas/Post' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /posts/{slug}:
+    get:
+      summary: Get a published post
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Post, content: { application/json: { schema: { $ref: '#/components/schemas/Post' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /posts/{slug}/comments:
+    get:
+      summary: List comments for a post
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Comments }
+    post:
+      summary: Create a comment
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommentInput' }
+      responses:
+        '201': { description: Created comment }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /comments/{id}:
+    delete:
+      summary: Delete an owned comment (or any comment as admin)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /tools/json/format:
+    post:
+      summary: Format JSON text
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [input], properties: { input: { type: string } } }
+      responses:
+        '200': { description: Formatted JSON }
+components:
+  schemas:
+    Credentials:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string }
+        password: { type: string, format: password }
+    User:
+      type: object
+      properties:
+        id: { type: integer }
+        username: { type: string }
+        role: { type: string, enum: [admin, user] }
+        created_at: { type: string, format: date-time }
+    PostInput:
+      type: object
+      required: [slug, title, content_md]
+      properties:
+        slug: { type: string }
+        title: { type: string }
+        content_md: { type: string }
+    Post:
+      type: object
+      properties:
+        id: { type: integer }
+        slug: { type: string }
+        title: { type: string }
+        content_html: { type: string }
+        published_at: { type: string, format: date-time }
+    PostList:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Post' } }
+        page: { type: integer }
+        page_size: { type: integer }
+        has_more: { type: boolean }
+    CommentInput:
+      type: object
+      required: [content]
+      properties:
+        content: { type: string, maxLength: 4000 }
+        parent_id: { type: integer, nullable: true }
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+  responses:
+    Unauthorized: { description: Login required }
+    Forbidden: { description: Insufficient permission }
+    NotFound: { description: Resource not found }

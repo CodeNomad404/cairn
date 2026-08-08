@@ -1,7 +1,6 @@
 package seo
 
 import (
-	"context"
 	"encoding/xml"
 	"net/http"
 	"net/url"
@@ -9,20 +8,18 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"cairn.cn/internal/blog"
+	bloglogic "cairn.cn/internal/blog/logic"
+	"cairn.cn/internal/svc"
 	"cairn.cn/internal/web"
 )
 
-type postSource interface {
-	ListPublishedMetadata(context.Context) ([]blog.Post, error)
-}
-
+// Handler serves SEO endpoints (robots.txt, sitemap.xml).
 type Handler struct {
-	posts postSource
+	svcCtx *svc.ServiceContext
 }
 
-func New(posts postSource) *Handler {
-	return &Handler{posts: posts}
+func New(svcCtx *svc.ServiceContext) *Handler {
+	return &Handler{svcCtx: svcCtx}
 }
 
 func (h *Handler) RegisterRoutes(r chi.Router) {
@@ -48,7 +45,8 @@ type sitemapURL struct {
 }
 
 func (h *Handler) sitemap(w http.ResponseWriter, r *http.Request) {
-	posts, err := h.posts.ListPublishedMetadata(r.Context())
+	l := bloglogic.NewPostLogic(r.Context(), h.svcCtx)
+	posts, err := l.ListPublishedMetadata()
 	if err != nil {
 		http.Error(w, "failed to build sitemap", http.StatusInternalServerError)
 		return

@@ -2,8 +2,11 @@ package repository
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"cairn.cn/internal/blog"
@@ -42,6 +45,9 @@ func (r *PostRepository) GetBySlug(ctx context.Context, slug string) (*blog.Post
 		&p.Status, &p.CreatedAt, &p.UpdatedAt, &pubAt,
 	)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("%w: %s", blog.ErrPostNotFound, slug)
+		}
 		return nil, err
 	}
 	p.PublishedAt = pubAt

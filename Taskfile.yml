@@ -4,12 +4,12 @@ tasks:
   dev:
     desc: Start development with hot reload
     cmds:
-      - air
+      - docker compose up --build
 
   build:
-    desc: Build binary
+    desc: Build local development images
     cmds:
-      - go build -o bin/cairn ./cmd/server
+      - docker compose build
 
   deploy:
     desc: Pull and deploy the latest master branch to production
@@ -24,17 +24,18 @@ tasks:
   db:up:
     desc: Start PostgreSQL
     cmds:
-      - docker compose up -d
+      - docker compose up -d db
 
   db:down:
     desc: Stop PostgreSQL
     cmds:
-      - docker compose down
+      - docker compose stop db
 
   db:migrate:
     desc: Run database migrations
     cmds:
-      - migrate -path migrations -database "postgres://cairn:{{.DB_PASSWORD}}@localhost:5432/cairn?sslmode=disable" up
+      - docker compose build migrate
+      - docker compose run --rm migrate
 
   tidy:
     desc: Tidy Go modules
