@@ -14,6 +14,7 @@ import (
 	"cairn.cn/internal/util"
 )
 
+// add
 // AuthHandler exposes auth endpoints over HTTP.
 type AuthHandler struct {
 	svcCtx        *svc.ServiceContext
