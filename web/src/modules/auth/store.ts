@@ -2,7 +2,7 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import { APIRequestError } from '../../shared/api/http'
-import { getCurrentUser, login as requestLogin, logout as requestLogout } from './api/auth'
+import { getCurrentUser, login as requestLogin, register as requestRegister, logout as requestLogout } from './api/auth'
 import type { Credentials, User } from './types'
 
 export const useAuthStore = defineStore('auth', () => {
@@ -13,6 +13,15 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true
     try {
       user.value = await requestLogin(credentials)
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function register(credentials: Credentials) {
+    loading.value = true
+    try {
+      user.value = await requestRegister(credentials)
     } finally {
       loading.value = false
     }
@@ -34,5 +43,5 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
   }
 
-  return { user, loading, login, loadCurrentUser, logout }
+  return { user, loading, login, register, loadCurrentUser, logout }
 })

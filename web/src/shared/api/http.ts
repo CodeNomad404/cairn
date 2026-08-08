@@ -2,17 +2,16 @@ export class APIRequestError extends Error {
   constructor(
     message: string,
     readonly status: number,
-    readonly code?: string,
+    readonly code: number,
   ) {
     super(message)
   }
 }
 
-type ErrorPayload = {
-  error?: {
-    code?: string
-    message?: string
-  }
+type APIEnvelope = {
+  code: number
+  message?: string
+  data?: unknown
 }
 
 export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -31,14 +30,13 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
     return undefined as T
   }
 
-  const body = await response.json().catch(() => null)
-  if (!response.ok) {
-    const error = body as ErrorPayload | null
+  const body: APIEnvelope | null = await response.json().catch(() => null)
+  if (!response.ok || (body && body.code !== 0 && body.code !== 1)) {
     throw new APIRequestError(
-      error?.error?.message ?? '请求失败，请稍后重试。',
+      body?.message ?? '请求失败，请稍后重试。',
       response.status,
-      error?.error?.code,
+      body?.code ?? -1,
     )
   }
-  return body as T
+  return (body?.data ?? body) as T
 }
