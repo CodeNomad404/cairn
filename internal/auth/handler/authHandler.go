@@ -49,14 +49,14 @@ func (r RegisterRequest) Validate() error {
 }
 
 func (h *AuthHandler) register(w http.ResponseWriter, r *http.Request, req *RegisterRequest) {
-	l := logic.NewAuthLogic(r.Context(), h.svcCtx)
-	_, code, msg := l.Register(req.Username, req.Password)
+	l := logic.NewAuthLogic(h.svcCtx)
+	_, code, msg := l.Register(r.Context(), req.Username, req.Password)
 	if code != util.CodeSuccess {
 		util.Reply(r.Context(), w, nil, code, msg)
 		return
 	}
 
-	data, code, msg := l.Login(req.Username, req.Password)
+	data, code, msg := l.Login(r.Context(), req.Username, req.Password)
 	if code != util.CodeSuccess {
 		util.Reply(r.Context(), w, nil, code, msg)
 		return
@@ -83,8 +83,8 @@ func (r LoginRequest) Validate() error {
 }
 
 func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request, req *LoginRequest) {
-	l := logic.NewAuthLogic(r.Context(), h.svcCtx)
-	data, code, msg := l.Login(req.Username, req.Password)
+	l := logic.NewAuthLogic(h.svcCtx)
+	data, code, msg := l.Login(r.Context(), req.Username, req.Password)
 	if code != util.CodeSuccess {
 		util.Reply(r.Context(), w, nil, code, msg)
 		return
@@ -98,8 +98,8 @@ func (h *AuthHandler) logout(w http.ResponseWriter, r *http.Request) {
 	var code util.Code
 	var msg string
 	if cookie, err := r.Cookie(auth.SessionCookie); err == nil {
-		l := logic.NewAuthLogic(r.Context(), h.svcCtx)
-		_, code, msg = l.Logout(cookie.Value)
+		l := logic.NewAuthLogic(h.svcCtx)
+		_, code, msg = l.Logout(r.Context(), cookie.Value)
 	}
 	h.clearSessionCookie(w)
 	if code == 0 {

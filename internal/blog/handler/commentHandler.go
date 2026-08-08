@@ -45,21 +45,21 @@ func (r CreateCommentRequest) Validate() error {
 
 // create adds a comment to a blog post.
 func (h *CommentHandler) create(w http.ResponseWriter, r *http.Request, slug string, req *CreateCommentRequest) {
-	l := bloglogic.NewCommentLogic(r.Context(), h.svcCtx)
-	data, code, msg := l.Create(slug, req.ParentID, authmid.GetUser(r.Context()), req.Content)
+	l := bloglogic.NewCommentLogic(h.svcCtx)
+	data, code, msg := l.Create(r.Context(), slug, req.ParentID, authmid.GetUser(r.Context()), req.Content)
 	util.Reply(r.Context(), w, data, code, msg)
 }
 
 // delete removes a comment.
 func (h *CommentHandler) delete(w http.ResponseWriter, r *http.Request, id int64) {
-	l := bloglogic.NewCommentLogic(r.Context(), h.svcCtx)
-	data, code, msg := l.Delete(id, authmid.GetUser(r.Context()))
+	l := bloglogic.NewCommentLogic(h.svcCtx)
+	data, code, msg := l.Delete(r.Context(), id, authmid.GetUser(r.Context()))
 	util.Reply(r.Context(), w, data, code, msg)
 }
 
 // list returns the comments for a blog post.
 func (h *CommentHandler) list(w http.ResponseWriter, r *http.Request, slug string) {
-	l := bloglogic.NewCommentLogic(r.Context(), h.svcCtx)
-	data, code, msg := l.List(slug)
+	l := bloglogic.NewCommentLogic(h.svcCtx)
+	data, code, msg := l.List(r.Context(), slug)
 	util.Reply(r.Context(), w, data, code, msg)
 }

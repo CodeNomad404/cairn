@@ -134,7 +134,7 @@ HTTP 请求
 - **Router**：声明路径、HTTP 方法和中间件顺序。需登录或角色的接口在路由层使用 `RequireUser` / `RequireRole`，使鉴权先于请求体解析执行。
 - **util/request.go**：负责所有 HTTP 输入的机械处理，包括 Body、Query 和 Path 参数的读取、默认值、类型转换、大小限制、未知字段检查、调用 DTO 的 `Validate()`，以及解析失败时写入统一错误响应。成功后通过类型安全的回调进入 Handler。该文件只提供通用解析能力，不定义具体业务接口的 DTO，也不包含业务规则。
 - **Handler**：只允许定义请求 DTO（含 `Validate()`）和 Handler 接口方法。Handler 方法获取 util 层已经解析并校验的类型化参数，只负责取得认证上下文、调用 Logic 和调用 `util.Reply`；不得定义 JSON、Query、Path、分页或类型转换等解析辅助函数，不直接访问数据库，也不接收数据库模型后再组装响应。请求 DTO 及其 `Validate()` 必须与对应接口方法放在同一个 Handler 文件内，并紧挨该接口方法，方便阅读接口时立即看到参数契约。
-- **Logic**：负责业务规则、业务编排以及最终输出数据的组装。Repository 返回的数据库模型只能在 Logic 内部使用；Logic 必须转换成可直接交给 `util.Reply` 的 `XxxResult`。Logic 按请求创建，构造函数接收 `context.Context` 和 `*svc.ServiceContext`。面向 JSON API Handler 的业务方法统一返回 `(data any, code util.Code, msg string)`。
+- **Logic**：负责业务规则、业务编排以及最终输出数据的组装。Repository 返回的数据库模型只能在 Logic 内部使用；Logic 必须转换成可直接交给 `util.Reply` 的 `XxxResult`。Logic 不保存 `context.Context`；所有需要 Context 的方法都将 `ctx context.Context` 作为第一个参数，并继续传给 Repository。当前构造函数仍接收 `*svc.ServiceContext`，后续按架构整改清单逐步改为精确依赖注入。面向 JSON API Handler 的业务方法暂时统一返回 `(data any, code util.Code, msg string)`，后续按整改清单改为强类型结果和应用错误。
 - **Repository**：封装 PostgreSQL 读写，接收 `context.Context`，不处理 HTTP 响应。
 - **ServiceContext**：在应用启动时组装配置和 Repository，向 Handler/Logic 提供依赖；不在业务代码中重复创建数据库连接。
 - **util/response.go**：`util.Reply(ctx, w, data, code, msg)` 负责业务码到 HTTP 状态的映射和 JSON 信封格式。Handler 不再自行拼装 JSON 错误响应。

@@ -45,8 +45,8 @@ type sitemapURL struct {
 }
 
 func (h *Handler) sitemap(w http.ResponseWriter, r *http.Request) {
-	l := bloglogic.NewPostLogic(r.Context(), h.svcCtx)
-	posts, err := l.ListPublishedMetadata()
+	l := bloglogic.NewPostLogic(h.svcCtx)
+	posts, err := l.ListPublishedMetadata(r.Context())
 	if err != nil {
 		http.Error(w, "failed to build sitemap", http.StatusInternalServerError)
 		return

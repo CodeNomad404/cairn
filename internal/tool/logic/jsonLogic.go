@@ -1,7 +1,6 @@
 package logic
 
 import (
-	"context"
 	"encoding/json"
 
 	"cairn.cn/internal/svc"
@@ -10,13 +9,12 @@ import (
 
 // JSONLogic JSON 格式化工具的业务逻辑
 type JSONLogic struct {
-	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
 
 // NewJSONLogic 创建 JSONLogic
-func NewJSONLogic(ctx context.Context, svcCtx *svc.ServiceContext) *JSONLogic {
-	return &JSONLogic{ctx: ctx, svcCtx: svcCtx}
+func NewJSONLogic(svcCtx *svc.ServiceContext) *JSONLogic {
+	return &JSONLogic{svcCtx: svcCtx}
 }
 
 // Format 校验并格式化 JSON

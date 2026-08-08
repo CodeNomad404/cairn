@@ -52,21 +52,21 @@ func (r CreatePostRequest) Validate() error {
 
 // create adds a blog post.
 func (h *PostHandler) create(w http.ResponseWriter, r *http.Request, req *CreatePostRequest) {
-	l := bloglogic.NewPostLogic(r.Context(), h.svcCtx)
-	data, code, msg := l.Create(req.Slug, req.Title, req.ContentMD, authmid.GetUser(r.Context()))
+	l := bloglogic.NewPostLogic(h.svcCtx)
+	data, code, msg := l.Create(r.Context(), req.Slug, req.Title, req.ContentMD, authmid.GetUser(r.Context()))
 	util.Reply(r.Context(), w, data, code, msg)
 }
 
 // list returns published blog posts.
 func (h *PostHandler) list(w http.ResponseWriter, r *http.Request, pagination util.Pagination) {
-	l := bloglogic.NewPostLogic(r.Context(), h.svcCtx)
-	data, code, msg := l.List(pagination.Page, pagination.PageSize)
+	l := bloglogic.NewPostLogic(h.svcCtx)
+	data, code, msg := l.List(r.Context(), pagination.Page, pagination.PageSize)
 	util.Reply(r.Context(), w, data, code, msg)
 }
 
 // get returns one blog post by slug.
 func (h *PostHandler) get(w http.ResponseWriter, r *http.Request, slug string) {
-	l := bloglogic.NewPostLogic(r.Context(), h.svcCtx)
-	data, code, msg := l.Get(slug)
+	l := bloglogic.NewPostLogic(h.svcCtx)
+	data, code, msg := l.Get(r.Context(), slug)
 	util.Reply(r.Context(), w, data, code, msg)
 }

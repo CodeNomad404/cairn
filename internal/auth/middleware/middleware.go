@@ -20,8 +20,8 @@ func LoadUser(svcCtx *svc.ServiceContext) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			cookie, err := r.Cookie(auth.SessionCookie)
 			if err == nil && cookie.Value != "" {
-				l := authlogic.NewAuthLogic(r.Context(), svcCtx)
-				user, err := l.GetUserByToken(cookie.Value)
+				l := authlogic.NewAuthLogic(svcCtx)
+				user, err := l.GetUserByToken(r.Context(), cookie.Value)
 				if err == nil {
 					ctx := context.WithValue(r.Context(), userKey, user)
 					r = r.WithContext(ctx)

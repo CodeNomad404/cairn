@@ -38,8 +38,9 @@ func main() {
 	svcCtx := &svc.ServiceContext{
 		PostRepo: repository.New(db),
 	}
-	l := logic.NewPostLogic(ctx, svcCtx)
+	l := logic.NewPostLogic(svcCtx)
 	_, code, msg := l.Create(
+		ctx,
 		"day-one-server-ready",
 		"Cairn 的第一天：把服务器搞定了",
 		string(md),
