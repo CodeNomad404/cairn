@@ -11,6 +11,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"cairn.cn/internal/auth"
+	authmodel "cairn.cn/internal/auth/model"
 	"cairn.cn/internal/httpx"
 )
 
@@ -44,7 +45,7 @@ func (l *AuthLogic) Register(ctx context.Context, username, password string) (ht
 		return httpx.CodeInternalError, httpx.NewAppError("密码加密失败", err)
 	}
 
-	u := &auth.User{
+	u := &authmodel.User{
 		Username: username,
 		Password: string(hash),
 		Role:     auth.RoleUser,
@@ -55,10 +56,18 @@ func (l *AuthLogic) Register(ctx context.Context, username, password string) (ht
 	return httpx.CodeCreated, nil
 }
 
+// UserResult 是对外公开的用户信息。
+type UserResult struct {
+	ID        int64     `json:"id"`
+	Username  string    `json:"username"`
+	Role      string    `json:"role"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 // LoginResult 保存成功登录的产物。
 type LoginResult struct {
 	Token string
-	User  *auth.User
+	User  UserResult
 }
 
 // Login 验证用户名密码，创建 session.
@@ -84,7 +93,7 @@ func (l *AuthLogic) Login(ctx context.Context, username, password string) (Login
 	}
 	token := hex.EncodeToString(tokenBytes)
 
-	session := &auth.Session{
+	session := &authmodel.Session{
 		Token:     token,
 		UserID:    u.ID,
 		CreatedAt: time.Now(),
@@ -94,7 +103,7 @@ func (l *AuthLogic) Login(ctx context.Context, username, password string) (Login
 		return LoginResult{}, httpx.CodeInternalError, httpx.NewAppError("创建会话失败", err)
 	}
 
-	return LoginResult{Token: token, User: u}, httpx.CodeSuccess, nil
+	return LoginResult{Token: token, User: toUserResult(u)}, httpx.CodeSuccess, nil
 }
 
 // Logout 登出，删除 session.
@@ -105,8 +114,8 @@ func (l *AuthLogic) Logout(ctx context.Context, token string) (httpx.Code, error
 	return httpx.CodeNoContent, nil
 }
 
-// GetUserByToken 通过 session token 获取用户（内部方法，供中间件使用）。
-func (l *AuthLogic) GetUserByToken(ctx context.Context, token string) (*auth.User, error) {
+// GetPrincipalByToken 通过 session token 获取当前请求身份（内部方法，供中间件使用）。
+func (l *AuthLogic) GetPrincipalByToken(ctx context.Context, token string) (*auth.Principal, error) {
 	session, err := l.sessionRepo.GetByToken(ctx, token)
 	if err != nil {
 		return nil, err
@@ -115,5 +124,34 @@ func (l *AuthLogic) GetUserByToken(ctx context.Context, token string) (*auth.Use
 		_ = l.sessionRepo.Delete(ctx, token)
 		return nil, errors.New("会话已过期")
 	}
-	return l.userRepo.GetByID(ctx, session.UserID)
+	user, err := l.userRepo.GetByID(ctx, session.UserID)
+	if err != nil {
+		return nil, err
+	}
+	return &auth.Principal{
+		ID:       user.ID,
+		Username: user.Username,
+		Role:     user.Role,
+	}, nil
+}
+
+// Me 返回当前登录用户对外可见的信息。
+func (l *AuthLogic) Me(ctx context.Context, principal *auth.Principal) (UserResult, httpx.Code, error) {
+	if principal == nil {
+		return UserResult{}, httpx.CodeUnauthorized, httpx.NewAppError("login required", nil)
+	}
+	user, err := l.userRepo.GetByID(ctx, principal.ID)
+	if err != nil {
+		return UserResult{}, httpx.CodeInternalError, httpx.NewAppError("failed to load user", err)
+	}
+	return toUserResult(user), httpx.CodeSuccess, nil
+}
+
+func toUserResult(user *authmodel.User) UserResult {
+	return UserResult{
+		ID:        user.ID,
+		Username:  user.Username,
+		Role:      user.Role,
+		CreatedAt: user.CreatedAt,
+	}
 }

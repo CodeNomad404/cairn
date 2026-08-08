@@ -14,21 +14,22 @@ import (
 
 	"cairn.cn/internal/blog"
 	bloglogic "cairn.cn/internal/blog/logic"
+	blogmodel "cairn.cn/internal/blog/model"
 )
 
 type fakePostRepo struct {
-	posts []blog.Post
+	posts []blogmodel.Post
 	err   error
 }
 
-func (f fakePostRepo) Create(context.Context, *blog.Post) error { return nil }
-func (f fakePostRepo) GetBySlug(context.Context, string) (*blog.Post, error) {
+func (f fakePostRepo) Create(context.Context, *blogmodel.Post) error { return nil }
+func (f fakePostRepo) GetBySlug(context.Context, string) (*blogmodel.Post, error) {
 	return nil, nil
 }
-func (f fakePostRepo) ListPublished(context.Context, int, int) ([]blog.Post, error) {
+func (f fakePostRepo) ListPublished(context.Context, int, int) ([]blogmodel.Post, error) {
 	return nil, nil
 }
-func (f fakePostRepo) ListPublishedMetadata(context.Context) ([]blog.Post, error) {
+func (f fakePostRepo) ListPublishedMetadata(context.Context) ([]blogmodel.Post, error) {
 	return f.posts, f.err
 }
 
@@ -56,7 +57,7 @@ func TestRobots(t *testing.T) {
 
 func TestSitemap(t *testing.T) {
 	updatedAt := time.Date(2026, time.July, 5, 2, 3, 4, 0, time.FixedZone("CST", 8*60*60))
-	repo := fakePostRepo{posts: []blog.Post{{Slug: "go 与 web", UpdatedAt: updatedAt}}}
+	repo := fakePostRepo{posts: []blogmodel.Post{{Slug: "go 与 web", UpdatedAt: updatedAt}}}
 	recorder := httptest.NewRecorder()
 	seoRouter(repo).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/sitemap.xml", nil))
 

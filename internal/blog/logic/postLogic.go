@@ -15,6 +15,7 @@ import (
 	"github.com/yuin/goldmark/renderer/html"
 
 	"cairn.cn/internal/blog"
+	blogmodel "cairn.cn/internal/blog/model"
 	"cairn.cn/internal/httpx"
 )
 
@@ -91,7 +92,7 @@ func (l *PostLogic) Create(ctx context.Context, slug, title, contentMD string) (
 	title = strings.TrimSpace(title)
 	publishedAt := time.Now().UTC()
 
-	p := &blog.Post{
+	p := &blogmodel.Post{
 		Slug:        slug,
 		Title:       title,
 		ContentMD:   contentMD,
@@ -146,7 +147,7 @@ func (l *PostLogic) List(ctx context.Context, page, pageSize int) (PostListResul
 	return PostListResult{Items: items, Page: page, PageSize: pageSize, HasMore: hasMore}, httpx.CodeSuccess, nil
 }
 
-func toPostDetailResult(post *blog.Post) PostDetailResult {
+func toPostDetailResult(post *blogmodel.Post) PostDetailResult {
 	return PostDetailResult{
 		ID:          post.ID,
 		Slug:        post.Slug,
@@ -157,6 +158,6 @@ func toPostDetailResult(post *blog.Post) PostDetailResult {
 }
 
 // ListPublishedMetadata 返回 Sitemap 所需的最小文章元数据（内部方法）。
-func (l *PostLogic) ListPublishedMetadata(ctx context.Context) ([]blog.Post, error) {
+func (l *PostLogic) ListPublishedMetadata(ctx context.Context) ([]blogmodel.Post, error) {
 	return l.postRepo.ListPublishedMetadata(ctx)
 }

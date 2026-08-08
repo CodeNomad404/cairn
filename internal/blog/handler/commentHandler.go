@@ -52,7 +52,7 @@ func (h *CommentHandler) create(w http.ResponseWriter, r *http.Request) {
 		httpx.Reply(r.Context(), w, nil, httpx.CodeBadRequest, err)
 		return
 	}
-	data, code, err := h.commentLogic.Create(r.Context(), slug, req.ParentID, authmid.GetUser(r.Context()), req.Content)
+	data, code, err := h.commentLogic.Create(r.Context(), slug, req.ParentID, authmid.GetPrincipal(r.Context()), req.Content)
 	httpx.Reply(r.Context(), w, data, code, err)
 }
 
@@ -63,7 +63,7 @@ func (h *CommentHandler) delete(w http.ResponseWriter, r *http.Request) {
 		httpx.Reply(r.Context(), w, nil, httpx.CodeBadRequest, err)
 		return
 	}
-	code, err := h.commentLogic.Delete(r.Context(), id, authmid.GetUser(r.Context()))
+	code, err := h.commentLogic.Delete(r.Context(), id, authmid.GetPrincipal(r.Context()))
 	httpx.Reply(r.Context(), w, nil, code, err)
 }
 

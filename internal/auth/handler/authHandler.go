@@ -110,6 +110,7 @@ func (h *AuthHandler) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) me(w http.ResponseWriter, r *http.Request) {
-	user := authmid.GetUser(r.Context())
-	httpx.Reply(r.Context(), w, user, httpx.CodeSuccess, nil)
+	principal := authmid.GetPrincipal(r.Context())
+	data, code, err := h.authLogic.Me(r.Context(), principal)
+	httpx.Reply(r.Context(), w, data, code, err)
 }

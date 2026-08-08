@@ -5,7 +5,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"cairn.cn/internal/blog"
+	blogmodel "cairn.cn/internal/blog/model"
 )
 
 // CommentRepository 负责 comments 表的数据库操作
@@ -19,7 +19,7 @@ func NewCommentRepo(db *pgxpool.Pool) *CommentRepository {
 }
 
 // Create 插入一条评论
-func (r *CommentRepository) Create(ctx context.Context, c *blog.Comment) error {
+func (r *CommentRepository) Create(ctx context.Context, c *blogmodel.Comment) error {
 	sql := `INSERT INTO comments (post_id, parent_id, user_id, content)
 	        VALUES ($1, $2, $3, $4)
 	        RETURNING id, status, created_at`
@@ -29,8 +29,8 @@ func (r *CommentRepository) Create(ctx context.Context, c *blog.Comment) error {
 }
 
 // GetByID 根据 id 查询一条评论
-func (r *CommentRepository) GetByID(ctx context.Context, id int64) (*blog.Comment, error) {
-	c := &blog.Comment{}
+func (r *CommentRepository) GetByID(ctx context.Context, id int64) (*blogmodel.Comment, error) {
+	c := &blogmodel.Comment{}
 	err := r.db.QueryRow(ctx, `
 		SELECT c.id, c.post_id, c.parent_id, c.user_id, u.username,
 		       c.content, c.status, c.created_at
@@ -47,7 +47,7 @@ func (r *CommentRepository) GetByID(ctx context.Context, id int64) (*blog.Commen
 }
 
 // ListByPostID 返回某篇文章的顶层评论（含 replies）
-func (r *CommentRepository) ListByPostID(ctx context.Context, postID int64) ([]blog.Comment, error) {
+func (r *CommentRepository) ListByPostID(ctx context.Context, postID int64) ([]blogmodel.Comment, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT c.id, c.post_id, c.parent_id, c.user_id, u.username,
 		       c.content, c.status, c.created_at
@@ -60,9 +60,9 @@ func (r *CommentRepository) ListByPostID(ctx context.Context, postID int64) ([]b
 	}
 	defer rows.Close()
 
-	var all []blog.Comment
+	var all []blogmodel.Comment
 	for rows.Next() {
-		var c blog.Comment
+		var c blogmodel.Comment
 		err := rows.Scan(&c.ID, &c.PostID, &c.ParentID, &c.UserID, &c.Username,
 			&c.Content, &c.Status, &c.CreatedAt)
 		if err != nil {
@@ -86,8 +86,8 @@ func (r *CommentRepository) Delete(ctx context.Context, id int64) error {
 }
 
 // buildTree 将平铺的评论列表转成树形（1 级回复）
-func buildTree(all []blog.Comment) []blog.Comment {
-	byID := make(map[int64]*blog.Comment, len(all))
+func buildTree(all []blogmodel.Comment) []blogmodel.Comment {
+	byID := make(map[int64]*blogmodel.Comment, len(all))
 
 	for i := range all {
 		byID[all[i].ID] = &all[i]
@@ -104,7 +104,7 @@ func buildTree(all []blog.Comment) []blog.Comment {
 	}
 
 	// 再收集顶层评论（此时 replies 已填充完毕）
-	var roots []blog.Comment
+	var roots []blogmodel.Comment
 	for i := range all {
 		if all[i].ParentID == nil {
 			roots = append(roots, all[i])
@@ -112,7 +112,7 @@ func buildTree(all []blog.Comment) []blog.Comment {
 	}
 
 	if roots == nil {
-		roots = []blog.Comment{}
+		roots = []blogmodel.Comment{}
 	}
 	return roots
 }
