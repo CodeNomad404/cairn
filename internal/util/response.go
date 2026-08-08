@@ -3,6 +3,8 @@ package util
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 )
 
@@ -21,6 +23,27 @@ const (
 	CodeValidationFailed Code = 422
 	CodeInternalError    Code = 500
 )
+
+// AppError carries a client-safe message while retaining the original cause.
+type AppError struct {
+	Message string
+	cause   error
+}
+
+func NewAppError(message string, cause error) *AppError {
+	return &AppError{Message: message, cause: cause}
+}
+
+func (e *AppError) Error() string {
+	if e.cause == nil {
+		return e.Message
+	}
+	return fmt.Sprintf("%s: %v", e.Message, e.cause)
+}
+
+func (e *AppError) Unwrap() error {
+	return e.cause
+}
 
 // HTTPStatus maps a Code to its HTTP status code.
 func (c Code) HTTPStatus() int {
@@ -54,25 +77,37 @@ type body struct {
 }
 
 // Reply writes a standard JSON response.
-func Reply(ctx context.Context, w http.ResponseWriter, data any, code Code, msg string) {
+func Reply(ctx context.Context, w http.ResponseWriter, data any, code Code, err error) {
 	_ = ctx
+
+	if err != nil {
+		var appErr *AppError
+		if !errors.As(err, &appErr) {
+			code = CodeInternalError
+			appErr = NewAppError("internal server error", nil)
+		}
+		if code == CodeSuccess || code == CodeCreated || code == CodeNoContent {
+			code = CodeInternalError
+		}
+		writeJSON(w, code.HTTPStatus(), body{Code: int(code), Message: appErr.Message})
+		return
+	}
 
 	if code == CodeNoContent {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
-	httpStatus := code.HTTPStatus()
 	if code == CodeSuccess || code == CodeCreated {
 		if data == nil {
-			writeJSON(w, httpStatus, body{Code: int(code)})
+			writeJSON(w, code.HTTPStatus(), body{Code: int(code)})
 			return
 		}
-		writeJSON(w, httpStatus, body{Code: int(code), Data: data})
+		writeJSON(w, code.HTTPStatus(), body{Code: int(code), Data: data})
 		return
 	}
 
-	writeJSON(w, httpStatus, body{Code: int(code), Message: msg})
+	writeJSON(w, http.StatusInternalServerError, body{Code: int(CodeInternalError), Message: "internal server error"})
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

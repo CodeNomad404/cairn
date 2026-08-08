@@ -24,24 +24,24 @@ func NewAuthLogic(userRepo auth.UserRepo, sessionRepo auth.SessionRepo) *AuthLog
 	return &AuthLogic{userRepo: userRepo, sessionRepo: sessionRepo}
 }
 
-// Register 注册新用户，返回创建的用户（不含密码）
-func (l *AuthLogic) Register(ctx context.Context, username, password string) (any, util.Code, string) {
+// Register 注册新用户。
+func (l *AuthLogic) Register(ctx context.Context, username, password string) (util.Code, error) {
 	username = strings.TrimSpace(username)
 
 	if len(username) < 2 || len(username) > 64 {
-		return nil, util.CodeBadRequest, "用户名需要 2–64 个字符"
+		return util.CodeBadRequest, util.NewAppError("用户名需要 2–64 个字符", nil)
 	}
 	if len(password) < 6 {
-		return nil, util.CodeBadRequest, "密码至少 6 个字符"
+		return util.CodeBadRequest, util.NewAppError("密码至少 6 个字符", nil)
 	}
 
 	if existing, _ := l.userRepo.GetByUsername(ctx, username); existing != nil {
-		return nil, util.CodeValidationFailed, "用户名已被注册"
+		return util.CodeValidationFailed, util.NewAppError("用户名已被注册", nil)
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, util.CodeInternalError, "密码加密失败"
+		return util.CodeInternalError, util.NewAppError("密码加密失败", err)
 	}
 
 	u := &auth.User{
@@ -50,9 +50,9 @@ func (l *AuthLogic) Register(ctx context.Context, username, password string) (an
 		Role:     auth.RoleUser,
 	}
 	if err := l.userRepo.Create(ctx, u); err != nil {
-		return nil, util.CodeInternalError, "创建用户失败"
+		return util.CodeInternalError, util.NewAppError("创建用户失败", err)
 	}
-	return u, util.CodeSuccess, ""
+	return util.CodeCreated, nil
 }
 
 // LoginResult holds the product of a successful login.
@@ -62,25 +62,25 @@ type LoginResult struct {
 }
 
 // Login 验证用户名密码，创建 session.
-func (l *AuthLogic) Login(ctx context.Context, username, password string) (any, util.Code, string) {
+func (l *AuthLogic) Login(ctx context.Context, username, password string) (LoginResult, util.Code, error) {
 	username = strings.TrimSpace(username)
 
 	if username == "" || password == "" {
-		return nil, util.CodeBadRequest, "用户名和密码不能为空"
+		return LoginResult{}, util.CodeBadRequest, util.NewAppError("用户名和密码不能为空", nil)
 	}
 
 	u, err := l.userRepo.GetByUsername(ctx, username)
 	if err != nil {
-		return nil, util.CodeUnauthorized, "用户名或密码错误"
+		return LoginResult{}, util.CodeUnauthorized, util.NewAppError("用户名或密码错误", err)
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(password)); err != nil {
-		return nil, util.CodeUnauthorized, "用户名或密码错误"
+		return LoginResult{}, util.CodeUnauthorized, util.NewAppError("用户名或密码错误", err)
 	}
 
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
-		return nil, util.CodeInternalError, "生成会话失败"
+		return LoginResult{}, util.CodeInternalError, util.NewAppError("生成会话失败", err)
 	}
 	token := hex.EncodeToString(tokenBytes)
 
@@ -91,18 +91,18 @@ func (l *AuthLogic) Login(ctx context.Context, username, password string) (any, 
 		ExpiresAt: time.Now().Add(30 * 24 * time.Hour),
 	}
 	if err := l.sessionRepo.Create(ctx, session); err != nil {
-		return nil, util.CodeInternalError, "创建会话失败"
+		return LoginResult{}, util.CodeInternalError, util.NewAppError("创建会话失败", err)
 	}
 
-	return &LoginResult{Token: token, User: u}, util.CodeSuccess, ""
+	return LoginResult{Token: token, User: u}, util.CodeSuccess, nil
 }
 
 // Logout 登出，删除 session.
-func (l *AuthLogic) Logout(ctx context.Context, token string) (any, util.Code, string) {
+func (l *AuthLogic) Logout(ctx context.Context, token string) (util.Code, error) {
 	if err := l.sessionRepo.Delete(ctx, token); err != nil {
-		return nil, util.CodeInternalError, "登出失败"
+		return util.CodeInternalError, util.NewAppError("登出失败", err)
 	}
-	return nil, util.CodeNoContent, ""
+	return util.CodeNoContent, nil
 }
 
 // GetUserByToken 通过 session token 获取用户（内部方法，供中间件使用）。

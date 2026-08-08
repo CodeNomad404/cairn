@@ -75,14 +75,14 @@ func NewPostLogic(postRepo blog.PostRepo) *PostLogic {
 }
 
 // Create 创建文章：Markdown → HTML → 安全过滤，写入数据库
-func (l *PostLogic) Create(ctx context.Context, slug, title, contentMD string) (any, util.Code, string) {
+func (l *PostLogic) Create(ctx context.Context, slug, title, contentMD string) (PostDetailResult, util.Code, error) {
 	if strings.TrimSpace(slug) == "" || strings.TrimSpace(title) == "" || strings.TrimSpace(contentMD) == "" {
-		return nil, util.CodeBadRequest, "slug, title, and content_md are required"
+		return PostDetailResult{}, util.CodeBadRequest, util.NewAppError("slug, title, and content_md are required", nil)
 	}
 
 	var buf strings.Builder
 	if err := l.md.Convert([]byte(contentMD), &buf); err != nil {
-		return nil, util.CodeInternalError, "markdown conversion failed"
+		return PostDetailResult{}, util.CodeInternalError, util.NewAppError("markdown conversion failed", err)
 	}
 
 	safeHTML := l.policy.Sanitize(buf.String())
@@ -100,32 +100,32 @@ func (l *PostLogic) Create(ctx context.Context, slug, title, contentMD string) (
 		PublishedAt: &publishedAt,
 	}
 	if err := l.postRepo.Create(ctx, p); err != nil {
-		return nil, util.CodeInternalError, "failed to create post"
+		return PostDetailResult{}, util.CodeInternalError, util.NewAppError("failed to create post", err)
 	}
-	return toPostDetailResult(p), util.CodeCreated, ""
+	return toPostDetailResult(p), util.CodeCreated, nil
 }
 
 // Get 按 slug 取文章
-func (l *PostLogic) Get(ctx context.Context, slug string) (any, util.Code, string) {
+func (l *PostLogic) Get(ctx context.Context, slug string) (PostDetailResult, util.Code, error) {
 	post, err := l.postRepo.GetBySlug(ctx, slug)
 	if errors.Is(err, blog.ErrPostNotFound) {
-		return nil, util.CodeNotFound, "post not found"
+		return PostDetailResult{}, util.CodeNotFound, util.NewAppError("post not found", err)
 	}
 	if err != nil {
-		return nil, util.CodeInternalError, "failed to load post"
+		return PostDetailResult{}, util.CodeInternalError, util.NewAppError("failed to load post", err)
 	}
-	return toPostDetailResult(post), util.CodeSuccess, ""
+	return toPostDetailResult(post), util.CodeSuccess, nil
 }
 
 // List 取已发布文章列表
-func (l *PostLogic) List(ctx context.Context, page, pageSize int) (any, util.Code, string) {
+func (l *PostLogic) List(ctx context.Context, page, pageSize int) (PostListResult, util.Code, error) {
 	if page < 1 || pageSize < 1 || pageSize > 100 {
-		return nil, util.CodeBadRequest, "page must be >= 1 and page_size must be between 1 and 100"
+		return PostListResult{}, util.CodeBadRequest, util.NewAppError("page must be >= 1 and page_size must be between 1 and 100", nil)
 	}
 
 	posts, err := l.postRepo.ListPublished(ctx, pageSize+1, (page-1)*pageSize)
 	if err != nil {
-		return nil, util.CodeInternalError, "failed to load posts"
+		return PostListResult{}, util.CodeInternalError, util.NewAppError("failed to load posts", err)
 	}
 
 	hasMore := len(posts) > pageSize
@@ -143,7 +143,7 @@ func (l *PostLogic) List(ctx context.Context, page, pageSize int) (any, util.Cod
 		}
 	}
 
-	return PostListResult{Items: items, Page: page, PageSize: pageSize, HasMore: hasMore}, util.CodeSuccess, ""
+	return PostListResult{Items: items, Page: page, PageSize: pageSize, HasMore: hasMore}, util.CodeSuccess, nil
 }
 
 func toPostDetailResult(post *blog.Post) PostDetailResult {

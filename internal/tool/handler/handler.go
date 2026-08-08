@@ -32,6 +32,6 @@ func (r FormatJSONRequest) Validate() error {
 }
 
 func (h *Handler) format(w http.ResponseWriter, r *http.Request, req *FormatJSONRequest) {
-	data, code, msg := h.jsonLogic.Format(req.Input)
-	util.Reply(r.Context(), w, data, code, msg)
+	data, code, err := h.jsonLogic.Format(req.Input)
+	util.Reply(r.Context(), w, data, code, err)
 }

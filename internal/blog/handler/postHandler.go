@@ -51,18 +51,18 @@ func (r CreatePostRequest) Validate() error {
 
 // create adds a blog post.
 func (h *PostHandler) create(w http.ResponseWriter, r *http.Request, req *CreatePostRequest) {
-	data, code, msg := h.postLogic.Create(r.Context(), req.Slug, req.Title, req.ContentMD)
-	util.Reply(r.Context(), w, data, code, msg)
+	data, code, err := h.postLogic.Create(r.Context(), req.Slug, req.Title, req.ContentMD)
+	util.Reply(r.Context(), w, data, code, err)
 }
 
 // list returns published blog posts.
 func (h *PostHandler) list(w http.ResponseWriter, r *http.Request, pagination util.Pagination) {
-	data, code, msg := h.postLogic.List(r.Context(), pagination.Page, pagination.PageSize)
-	util.Reply(r.Context(), w, data, code, msg)
+	data, code, err := h.postLogic.List(r.Context(), pagination.Page, pagination.PageSize)
+	util.Reply(r.Context(), w, data, code, err)
 }
 
 // get returns one blog post by slug.
 func (h *PostHandler) get(w http.ResponseWriter, r *http.Request, slug string) {
-	data, code, msg := h.postLogic.Get(r.Context(), slug)
-	util.Reply(r.Context(), w, data, code, msg)
+	data, code, err := h.postLogic.Get(r.Context(), slug)
+	util.Reply(r.Context(), w, data, code, err)
 }

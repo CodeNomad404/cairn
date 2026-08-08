@@ -44,18 +44,18 @@ func (r CreateCommentRequest) Validate() error {
 
 // create adds a comment to a blog post.
 func (h *CommentHandler) create(w http.ResponseWriter, r *http.Request, slug string, req *CreateCommentRequest) {
-	data, code, msg := h.commentLogic.Create(r.Context(), slug, req.ParentID, authmid.GetUser(r.Context()), req.Content)
-	util.Reply(r.Context(), w, data, code, msg)
+	data, code, err := h.commentLogic.Create(r.Context(), slug, req.ParentID, authmid.GetUser(r.Context()), req.Content)
+	util.Reply(r.Context(), w, data, code, err)
 }
 
 // delete removes a comment.
 func (h *CommentHandler) delete(w http.ResponseWriter, r *http.Request, id int64) {
-	data, code, msg := h.commentLogic.Delete(r.Context(), id, authmid.GetUser(r.Context()))
-	util.Reply(r.Context(), w, data, code, msg)
+	code, err := h.commentLogic.Delete(r.Context(), id, authmid.GetUser(r.Context()))
+	util.Reply(r.Context(), w, nil, code, err)
 }
 
 // list returns the comments for a blog post.
 func (h *CommentHandler) list(w http.ResponseWriter, r *http.Request, slug string) {
-	data, code, msg := h.commentLogic.List(r.Context(), slug)
-	util.Reply(r.Context(), w, data, code, msg)
+	data, code, err := h.commentLogic.List(r.Context(), slug)
+	util.Reply(r.Context(), w, data, code, err)
 }

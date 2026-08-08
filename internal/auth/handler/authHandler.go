@@ -48,20 +48,19 @@ func (r RegisterRequest) Validate() error {
 }
 
 func (h *AuthHandler) register(w http.ResponseWriter, r *http.Request, req *RegisterRequest) {
-	_, code, msg := h.authLogic.Register(r.Context(), req.Username, req.Password)
-	if code != util.CodeSuccess {
-		util.Reply(r.Context(), w, nil, code, msg)
+	code, err := h.authLogic.Register(r.Context(), req.Username, req.Password)
+	if err != nil {
+		util.Reply(r.Context(), w, nil, code, err)
 		return
 	}
 
-	data, code, msg := h.authLogic.Login(r.Context(), req.Username, req.Password)
-	if code != util.CodeSuccess {
-		util.Reply(r.Context(), w, nil, code, msg)
+	result, loginCode, err := h.authLogic.Login(r.Context(), req.Username, req.Password)
+	if err != nil {
+		util.Reply(r.Context(), w, nil, loginCode, err)
 		return
 	}
-	result := data.(*logic.LoginResult)
 	h.setSessionCookie(w, result.Token)
-	util.Reply(r.Context(), w, result.User, util.CodeCreated, "")
+	util.Reply(r.Context(), w, result.User, code, nil)
 }
 
 // LoginRequest is the request body for login.
@@ -81,30 +80,26 @@ func (r LoginRequest) Validate() error {
 }
 
 func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request, req *LoginRequest) {
-	data, code, msg := h.authLogic.Login(r.Context(), req.Username, req.Password)
-	if code != util.CodeSuccess {
-		util.Reply(r.Context(), w, nil, code, msg)
+	result, code, err := h.authLogic.Login(r.Context(), req.Username, req.Password)
+	if err != nil {
+		util.Reply(r.Context(), w, nil, code, err)
 		return
 	}
-	result := data.(*logic.LoginResult)
 	h.setSessionCookie(w, result.Token)
-	util.Reply(r.Context(), w, result.User, util.CodeSuccess, "")
+	util.Reply(r.Context(), w, result.User, code, nil)
 }
 
 func (h *AuthHandler) logout(w http.ResponseWriter, r *http.Request) {
-	var code util.Code
-	var msg string
+	code := util.CodeNoContent
+	var logoutErr error
 	if cookie, err := r.Cookie(auth.SessionCookie); err == nil {
-		_, code, msg = h.authLogic.Logout(r.Context(), cookie.Value)
+		code, logoutErr = h.authLogic.Logout(r.Context(), cookie.Value)
 	}
 	h.clearSessionCookie(w)
-	if code == 0 {
-		code = util.CodeNoContent
-	}
-	util.Reply(r.Context(), w, nil, code, msg)
+	util.Reply(r.Context(), w, nil, code, logoutErr)
 }
 
 func (h *AuthHandler) me(w http.ResponseWriter, r *http.Request) {
 	user := authmid.GetUser(r.Context())
-	util.Reply(r.Context(), w, user, util.CodeSuccess, "")
+	util.Reply(r.Context(), w, user, util.CodeSuccess, nil)
 }

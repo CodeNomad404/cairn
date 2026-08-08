@@ -133,10 +133,10 @@ HTTP 请求
 - **Router**：声明路径、HTTP 方法和中间件顺序。需登录或角色的接口在路由层使用 `RequireUser` / `RequireRole`，使鉴权先于请求体解析执行。
 - **util/request.go**：负责所有 HTTP 输入的机械处理，包括 Body、Query 和 Path 参数的读取、默认值、类型转换、大小限制、未知字段检查、调用 DTO 的 `Validate()`，以及解析失败时写入统一错误响应。成功后通过类型安全的回调进入 Handler。该文件只提供通用解析能力，不定义具体业务接口的 DTO，也不包含业务规则。
 - **Handler**：只允许定义请求 DTO（含 `Validate()`）和 Handler 接口方法。Handler 方法获取 util 层已经解析并校验的类型化参数，只负责取得认证上下文、调用 Logic 和调用 `util.Reply`；不得定义 JSON、Query、Path、分页或类型转换等解析辅助函数，不直接访问数据库，也不接收数据库模型后再组装响应。请求 DTO 及其 `Validate()` 必须与对应接口方法放在同一个 Handler 文件内，并紧挨该接口方法，方便阅读接口时立即看到参数契约。
-- **Logic**：负责业务规则、业务编排以及最终输出数据的组装。Repository 返回的数据库模型只能在 Logic 内部使用；Logic 必须转换成可直接交给 `util.Reply` 的 `XxxResult`。Logic 在应用启动时组装一次，构造函数只接收其实际使用的 Repository 接口；不保存 `context.Context`，需要 Context 的方法将 `ctx context.Context` 作为第一个参数并传给 Repository。面向 JSON API Handler 的业务方法统一返回 `(data any, code util.Code, msg string)`。
+- **Logic**：负责业务规则、业务编排以及最终输出数据的组装。Repository 返回的数据库模型只能在 Logic 内部使用；Logic 必须转换成可直接交给 `util.Reply` 的 `XxxResult`。Logic 在应用启动时组装一次，构造函数只接收其实际使用的 Repository 接口；不保存 `context.Context`，需要 Context 的方法将 `ctx context.Context` 作为第一个参数并传给 Repository。面向 JSON API Handler 的业务方法返回强类型 Result、`util.Code` 和 `error`；无数据操作返回 `util.Code` 和 `error`。
 - **Repository**：封装 PostgreSQL 读写，接收 `context.Context`，不处理 HTTP 响应。
 - **app（Composition Root）**：应用启动时创建 Repository、Logic、Handler 并完成组装；Handler 与 Middleware 接收已经创建好的 Logic，请求过程中不创建 Logic。初始化后只读的组件（Goldmark、Bluemonday Policy）只在启动时初始化一次，可安全并发复用。
-- **util/response.go**：`util.Reply(ctx, w, data, code, msg)` 负责业务码到 HTTP 状态的映射和 JSON 信封格式。Handler 不再自行拼装 JSON 错误响应。
+- **util/response.go**：集中定义业务码、`AppError` 和 `util.Reply(ctx, w, data, code, err)`。`AppError` 保存可安全公开的消息和原始 Cause；`Reply` 负责业务码到 HTTP 状态的映射、JSON 信封以及未知错误的 500 兜底。Handler 不自行拼装 JSON 错误响应。
 - **web**：仅保留与 HTTP/站点相关的通用基础设施，不放置 JSON 请求解析、参数校验或 API 响应函数。
 
 ### JSON API 开发约定
@@ -149,7 +149,7 @@ HTTP 请求
 6. Handler DTO 的 `Validate()` 只校验 HTTP 输入契约，例如必填、长度、格式和取值范围；权限、数据是否存在、唯一性和状态转换等业务规则仍由 Logic 校验。
 7. 鉴权放在 chi 路由中间件中，不在每个 Handler 里重复检查 `user == nil` 或角色。
 8. API 输出结构在 Logic 中命名为 `XxxResult`。Logic 负责从数据库模型挑选字段并组装完整 Result；禁止把 Repository 返回的模型直接交给 Handler，禁止在 Handler 中使用 `data.(*Model)` 后再次加工。
-9. Handler 调用 Logic 时使用 `data, code, msg := l.Method(...)`，并立即调用 `util.Reply(r.Context(), w, data, code, msg)`；Cookie 等必须由 HTTP 层处理的副作用除外。
+9. Handler 调用 Logic 时使用 `data, code, err := l.Method(...)`，并立即调用 `util.Reply(r.Context(), w, data, code, err)`；无数据操作只接收 `code, err` 并传入 `nil` data，Cookie 等必须由 HTTP 层处理的副作用除外。
 10. `healthz`、`robots.txt`、`sitemap.xml` 不是 JSON 业务 API，可按各自协议直接输出原始 JSON、文本或 XML，不强制使用 `util.Reply`。
 11. 新模块遵循相同的 `handler/logic/repository` 结构；只在真正需要持久化时增加 Repository。
 
