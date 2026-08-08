@@ -9,17 +9,16 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	bloglogic "cairn.cn/internal/blog/logic"
-	"cairn.cn/internal/svc"
 	"cairn.cn/internal/web"
 )
 
 // Handler serves SEO endpoints (robots.txt, sitemap.xml).
 type Handler struct {
-	svcCtx *svc.ServiceContext
+	postLogic *bloglogic.PostLogic
 }
 
-func New(svcCtx *svc.ServiceContext) *Handler {
-	return &Handler{svcCtx: svcCtx}
+func New(postLogic *bloglogic.PostLogic) *Handler {
+	return &Handler{postLogic: postLogic}
 }
 
 func (h *Handler) RegisterRoutes(r chi.Router) {
@@ -45,8 +44,7 @@ type sitemapURL struct {
 }
 
 func (h *Handler) sitemap(w http.ResponseWriter, r *http.Request) {
-	l := bloglogic.NewPostLogic(r.Context(), h.svcCtx)
-	posts, err := l.ListPublishedMetadata()
+	posts, err := h.postLogic.ListPublishedMetadata(r.Context())
 	if err != nil {
 		http.Error(w, "failed to build sitemap", http.StatusInternalServerError)
 		return

@@ -13,7 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"cairn.cn/internal/blog"
-	"cairn.cn/internal/svc"
+	bloglogic "cairn.cn/internal/blog/logic"
 )
 
 type fakePostRepo struct {
@@ -34,8 +34,7 @@ func (f fakePostRepo) ListPublishedMetadata(context.Context) ([]blog.Post, error
 
 func seoRouter(repo blog.PostRepo) http.Handler {
 	r := chi.NewRouter()
-	svcCtx := &svc.ServiceContext{PostRepo: repo}
-	New(svcCtx).RegisterRoutes(r)
+	New(bloglogic.NewPostLogic(repo)).RegisterRoutes(r)
 	return r
 }
 

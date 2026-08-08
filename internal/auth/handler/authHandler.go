@@ -10,19 +10,18 @@ import (
 	"cairn.cn/internal/auth"
 	"cairn.cn/internal/auth/logic"
 	authmid "cairn.cn/internal/auth/middleware"
-	"cairn.cn/internal/svc"
 	"cairn.cn/internal/util"
 )
 
 // add
 // AuthHandler exposes auth endpoints over HTTP.
 type AuthHandler struct {
-	svcCtx        *svc.ServiceContext
+	authLogic     *logic.AuthLogic
 	secureCookies bool
 }
 
-func NewAuthHandler(svcCtx *svc.ServiceContext, secureCookies bool) *AuthHandler {
-	return &AuthHandler{svcCtx: svcCtx, secureCookies: secureCookies}
+func NewAuthHandler(authLogic *logic.AuthLogic, secureCookies bool) *AuthHandler {
+	return &AuthHandler{authLogic: authLogic, secureCookies: secureCookies}
 }
 
 func (h *AuthHandler) RegisterRoutes(r chi.Router) {
@@ -49,21 +48,19 @@ func (r RegisterRequest) Validate() error {
 }
 
 func (h *AuthHandler) register(w http.ResponseWriter, r *http.Request, req *RegisterRequest) {
-	l := logic.NewAuthLogic(r.Context(), h.svcCtx)
-	_, code, msg := l.Register(req.Username, req.Password)
-	if code != util.CodeSuccess {
-		util.Reply(r.Context(), w, nil, code, msg)
+	code, err := h.authLogic.Register(r.Context(), req.Username, req.Password)
+	if err != nil {
+		util.Reply(r.Context(), w, nil, code, err)
 		return
 	}
 
-	data, code, msg := l.Login(req.Username, req.Password)
-	if code != util.CodeSuccess {
-		util.Reply(r.Context(), w, nil, code, msg)
+	result, loginCode, err := h.authLogic.Login(r.Context(), req.Username, req.Password)
+	if err != nil {
+		util.Reply(r.Context(), w, nil, loginCode, err)
 		return
 	}
-	result := data.(*logic.LoginResult)
 	h.setSessionCookie(w, result.Token)
-	util.Reply(r.Context(), w, result.User, util.CodeCreated, "")
+	util.Reply(r.Context(), w, result.User, code, nil)
 }
 
 // LoginRequest is the request body for login.
@@ -83,32 +80,26 @@ func (r LoginRequest) Validate() error {
 }
 
 func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request, req *LoginRequest) {
-	l := logic.NewAuthLogic(r.Context(), h.svcCtx)
-	data, code, msg := l.Login(req.Username, req.Password)
-	if code != util.CodeSuccess {
-		util.Reply(r.Context(), w, nil, code, msg)
+	result, code, err := h.authLogic.Login(r.Context(), req.Username, req.Password)
+	if err != nil {
+		util.Reply(r.Context(), w, nil, code, err)
 		return
 	}
-	result := data.(*logic.LoginResult)
 	h.setSessionCookie(w, result.Token)
-	util.Reply(r.Context(), w, result.User, util.CodeSuccess, "")
+	util.Reply(r.Context(), w, result.User, code, nil)
 }
 
 func (h *AuthHandler) logout(w http.ResponseWriter, r *http.Request) {
-	var code util.Code
-	var msg string
+	code := util.CodeNoContent
+	var logoutErr error
 	if cookie, err := r.Cookie(auth.SessionCookie); err == nil {
-		l := logic.NewAuthLogic(r.Context(), h.svcCtx)
-		_, code, msg = l.Logout(cookie.Value)
+		code, logoutErr = h.authLogic.Logout(r.Context(), cookie.Value)
 	}
 	h.clearSessionCookie(w)
-	if code == 0 {
-		code = util.CodeNoContent
-	}
-	util.Reply(r.Context(), w, nil, code, msg)
+	util.Reply(r.Context(), w, nil, code, logoutErr)
 }
 
 func (h *AuthHandler) me(w http.ResponseWriter, r *http.Request) {
 	user := authmid.GetUser(r.Context())
-	util.Reply(r.Context(), w, user, util.CodeSuccess, "")
+	util.Reply(r.Context(), w, user, util.CodeSuccess, nil)
 }

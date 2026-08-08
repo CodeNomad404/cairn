@@ -57,7 +57,7 @@ func ParsePositiveInt64Path(name string, next func(http.ResponseWriter, *http.Re
 	return ParsePath(name, func(w http.ResponseWriter, r *http.Request, value string) {
 		id, err := strconv.ParseInt(value, 10, 64)
 		if err != nil || id < 1 {
-			Reply(r.Context(), w, nil, CodeBadRequest, "参数错误")
+			Reply(r.Context(), w, nil, CodeBadRequest, NewAppError("参数错误", nil))
 			return
 		}
 		next(w, r, id)
@@ -75,12 +75,12 @@ func ParsePagination(next func(http.ResponseWriter, *http.Request, Pagination)) 
 	return func(w http.ResponseWriter, r *http.Request) {
 		page, ok := queryInt(r, "page", 1, 1, 0)
 		if !ok {
-			Reply(r.Context(), w, nil, CodeBadRequest, "参数错误")
+			Reply(r.Context(), w, nil, CodeBadRequest, NewAppError("参数错误", nil))
 			return
 		}
 		pageSize, ok := queryInt(r, "page_size", 20, 1, 100)
 		if !ok {
-			Reply(r.Context(), w, nil, CodeBadRequest, "参数错误")
+			Reply(r.Context(), w, nil, CodeBadRequest, NewAppError("参数错误", nil))
 			return
 		}
 		next(w, r, Pagination{Page: page, PageSize: pageSize})
@@ -90,11 +90,11 @@ func ParsePagination(next func(http.ResponseWriter, *http.Request, Pagination)) 
 func parseBody[T Validatable](w http.ResponseWriter, r *http.Request, maxBytes int64) (*T, bool) {
 	var req T
 	if err := decodeJSON(w, r, &req, maxBytes); err != nil {
-		Reply(r.Context(), w, nil, CodeBadRequest, err.Error())
+		Reply(r.Context(), w, nil, CodeBadRequest, NewAppError(err.Error(), err))
 		return nil, false
 	}
 	if err := req.Validate(); err != nil {
-		Reply(r.Context(), w, nil, CodeBadRequest, err.Error())
+		Reply(r.Context(), w, nil, CodeBadRequest, NewAppError(err.Error(), err))
 		return nil, false
 	}
 	return &req, true
@@ -103,7 +103,7 @@ func parseBody[T Validatable](w http.ResponseWriter, r *http.Request, maxBytes i
 func pathValue(w http.ResponseWriter, r *http.Request, name string) (string, bool) {
 	value := strings.TrimSpace(chi.URLParam(r, name))
 	if value == "" {
-		Reply(r.Context(), w, nil, CodeBadRequest, "参数错误")
+		Reply(r.Context(), w, nil, CodeBadRequest, NewAppError("参数错误", nil))
 		return "", false
 	}
 	return value, true

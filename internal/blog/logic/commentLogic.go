@@ -10,15 +10,14 @@ import (
 
 	"cairn.cn/internal/auth"
 	"cairn.cn/internal/blog"
-	"cairn.cn/internal/svc"
 	"cairn.cn/internal/util"
 )
 
 // CommentLogic 评论相关的业务逻辑
 type CommentLogic struct {
-	ctx    context.Context
-	svcCtx *svc.ServiceContext
-	policy *bluemonday.Policy
+	postRepo    blog.PostRepo
+	commentRepo blog.CommentRepo
+	policy      *bluemonday.Policy
 }
 
 // CommentResult is the complete API output for one comment.
@@ -39,90 +38,95 @@ type CommentListResult struct {
 	Items []CommentResult `json:"items"`
 }
 
-// NewCommentLogic 创建 CommentLogic 实例
-func NewCommentLogic(ctx context.Context, svcCtx *svc.ServiceContext) *CommentLogic {
+// NewCommentLogic 创建 CommentLogic 实例。
+// Bluemonday Policy 初始化后只读，可安全并发复用，故只在启动时创建一次。
+func NewCommentLogic(postRepo blog.PostRepo, commentRepo blog.CommentRepo) *CommentLogic {
 	policy := bluemonday.StrictPolicy()
-	return &CommentLogic{ctx: ctx, svcCtx: svcCtx, policy: policy}
+	return &CommentLogic{postRepo: postRepo, commentRepo: commentRepo, policy: policy}
 }
 
 // Create 提交一条评论
-func (l *CommentLogic) Create(slug string, parentID *int64, userID int64, content string) (any, util.Code, string) {
+func (l *CommentLogic) Create(ctx context.Context, slug string, parentID *int64, user *auth.User, content string) (CommentResult, util.Code, error) {
 	content = strings.TrimSpace(content)
 
+	if user == nil {
+		return CommentResult{}, util.CodeUnauthorized, util.NewAppError("login required", nil)
+	}
 	if content == "" {
-		return nil, util.CodeBadRequest, "content is required"
+		return CommentResult{}, util.CodeBadRequest, util.NewAppError("content is required", nil)
 	}
 	if len(content) > 4000 {
-		return nil, util.CodeBadRequest, "comment cannot exceed 4000 characters"
+		return CommentResult{}, util.CodeBadRequest, util.NewAppError("comment cannot exceed 4000 characters", nil)
 	}
-	post, err := l.svcCtx.PostRepo.GetBySlug(l.ctx, slug)
+	post, err := l.postRepo.GetBySlug(ctx, slug)
 	if errors.Is(err, blog.ErrPostNotFound) {
-		return nil, util.CodeNotFound, "post not found"
+		return CommentResult{}, util.CodeNotFound, util.NewAppError("post not found", err)
 	}
 	if err != nil {
-		return nil, util.CodeInternalError, "failed to load post"
+		return CommentResult{}, util.CodeInternalError, util.NewAppError("failed to load post", err)
 	}
 	if parentID != nil {
-		parent, err := l.svcCtx.CommentRepo.GetByID(l.ctx, *parentID)
+		parent, err := l.commentRepo.GetByID(ctx, *parentID)
 		if err != nil {
-			return nil, util.CodeValidationFailed, "parent comment not found"
+			return CommentResult{}, util.CodeValidationFailed, util.NewAppError("parent comment not found", err)
 		}
 		if parent.PostID != post.ID {
-			return nil, util.CodeValidationFailed, "cannot reply to a comment from a different post"
+			return CommentResult{}, util.CodeValidationFailed, util.NewAppError("cannot reply to a comment from a different post", nil)
 		}
 		if parent.ParentID != nil {
-			return nil, util.CodeValidationFailed, "only one level of replies is supported"
+			return CommentResult{}, util.CodeValidationFailed, util.NewAppError("only one level of replies is supported", nil)
 		}
 	}
 
 	c := &blog.Comment{
 		PostID:   post.ID,
 		ParentID: parentID,
-		UserID:   userID,
+		UserID:   user.ID,
 		Content:  l.policy.Sanitize(content),
 	}
-	if err := l.svcCtx.CommentRepo.Create(l.ctx, c); err != nil {
-		return nil, util.CodeInternalError, "failed to create comment"
+	if err := l.commentRepo.Create(ctx, c); err != nil {
+		return CommentResult{}, util.CodeInternalError, util.NewAppError("failed to create comment", err)
 	}
-	return toCommentResult(*c), util.CodeCreated, ""
+	c.Username = user.Username
+	return toCommentResult(*c), util.CodeCreated, nil
 }
 
 // List 取某篇文章的评论
-func (l *CommentLogic) List(slug string) (any, util.Code, string) {
-	post, err := l.svcCtx.PostRepo.GetBySlug(l.ctx, slug)
+func (l *CommentLogic) List(ctx context.Context, slug string) (CommentListResult, util.Code, error) {
+	post, err := l.postRepo.GetBySlug(ctx, slug)
 	if errors.Is(err, blog.ErrPostNotFound) {
-		return nil, util.CodeNotFound, "post not found"
+		return CommentListResult{}, util.CodeNotFound, util.NewAppError("post not found", err)
 	}
 	if err != nil {
-		return nil, util.CodeInternalError, "failed to load post"
+		return CommentListResult{}, util.CodeInternalError, util.NewAppError("failed to load post", err)
 	}
-	comments, err := l.svcCtx.CommentRepo.ListByPostID(l.ctx, post.ID)
+	comments, err := l.commentRepo.ListByPostID(ctx, post.ID)
 	if err != nil {
-		return nil, util.CodeInternalError, "failed to load comments"
+		return CommentListResult{}, util.CodeInternalError, util.NewAppError("failed to load comments", err)
 	}
 	items := make([]CommentResult, len(comments))
 	for i, comment := range comments {
 		items[i] = toCommentResult(comment)
 	}
-	return CommentListResult{Items: items}, util.CodeSuccess, ""
+	return CommentListResult{Items: items}, util.CodeSuccess, nil
 }
 
 // Delete 删除一条评论
-func (l *CommentLogic) Delete(id int64, user *auth.User) (any, util.Code, string) {
-	comment, err := l.svcCtx.CommentRepo.GetByID(l.ctx, id)
+func (l *CommentLogic) Delete(ctx context.Context, id int64, user *auth.User) (util.Code, error) {
+	comment, err := l.commentRepo.GetByID(ctx, id)
 	if err != nil {
-		return nil, util.CodeNotFound, "comment not found"
+		return util.CodeNotFound, util.NewAppError("comment not found", err)
 	}
 	if user == nil {
-		return nil, util.CodeUnauthorized, "login required"
+		return util.CodeUnauthorized, util.NewAppError("login required", nil)
 	}
 	if user.Role != auth.RoleAdmin && comment.UserID != user.ID {
-		return nil, util.CodeForbidden, "cannot delete this comment"
+		return util.CodeForbidden, util.NewAppError("cannot delete this comment", nil)
 	}
-	if err := l.svcCtx.CommentRepo.Delete(l.ctx, id); err != nil {
-		return nil, util.CodeInternalError, "failed to delete comment"
+	if err := l.commentRepo.Delete(ctx, id); err != nil {
+		return util.CodeInternalError, util.NewAppError("failed to delete comment", err)
 	}
-	return nil, util.CodeNoContent, ""
+	return util.CodeNoContent, nil
 }
 
 func toCommentResult(comment blog.Comment) CommentResult {

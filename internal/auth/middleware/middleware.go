@@ -6,7 +6,6 @@ import (
 
 	"cairn.cn/internal/auth"
 	authlogic "cairn.cn/internal/auth/logic"
-	"cairn.cn/internal/svc"
 	"cairn.cn/internal/util"
 )
 
@@ -15,13 +14,12 @@ type contextKey string
 const userKey contextKey = "user"
 
 // LoadUser 在每个请求中注入用户信息
-func LoadUser(svcCtx *svc.ServiceContext) func(http.Handler) http.Handler {
+func LoadUser(authLogic *authlogic.AuthLogic) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			cookie, err := r.Cookie(auth.SessionCookie)
 			if err == nil && cookie.Value != "" {
-				l := authlogic.NewAuthLogic(r.Context(), svcCtx)
-				user, err := l.GetUserByToken(cookie.Value)
+				user, err := authLogic.GetUserByToken(r.Context(), cookie.Value)
 				if err == nil {
 					ctx := context.WithValue(r.Context(), userKey, user)
 					r = r.WithContext(ctx)
@@ -49,7 +47,7 @@ func WithUser(ctx context.Context, user *auth.User) context.Context {
 func RequireUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if GetUser(r.Context()) == nil {
-			util.Reply(r.Context(), w, nil, util.CodeUnauthorized, "login required")
+			util.Reply(r.Context(), w, nil, util.CodeUnauthorized, util.NewAppError("login required", nil))
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -62,11 +60,11 @@ func RequireRole(role string) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			user := GetUser(r.Context())
 			if user == nil {
-				util.Reply(r.Context(), w, nil, util.CodeUnauthorized, "login required")
+				util.Reply(r.Context(), w, nil, util.CodeUnauthorized, util.NewAppError("login required", nil))
 				return
 			}
 			if user.Role != role {
-				util.Reply(r.Context(), w, nil, util.CodeForbidden, "insufficient permissions")
+				util.Reply(r.Context(), w, nil, util.CodeForbidden, util.NewAppError("insufficient permissions", nil))
 				return
 			}
 			next.ServeHTTP(w, r)

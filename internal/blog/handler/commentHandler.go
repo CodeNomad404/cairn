@@ -9,17 +9,16 @@ import (
 
 	authmid "cairn.cn/internal/auth/middleware"
 	bloglogic "cairn.cn/internal/blog/logic"
-	"cairn.cn/internal/svc"
 	"cairn.cn/internal/util"
 )
 
 // CommentHandler exposes comment endpoints over HTTP.
 type CommentHandler struct {
-	svcCtx *svc.ServiceContext
+	commentLogic *bloglogic.CommentLogic
 }
 
-func NewCommentHandler(svcCtx *svc.ServiceContext) *CommentHandler {
-	return &CommentHandler{svcCtx: svcCtx}
+func NewCommentHandler(commentLogic *bloglogic.CommentLogic) *CommentHandler {
+	return &CommentHandler{commentLogic: commentLogic}
 }
 
 func (h *CommentHandler) RegisterRoutes(r chi.Router) {
@@ -45,21 +44,18 @@ func (r CreateCommentRequest) Validate() error {
 
 // create adds a comment to a blog post.
 func (h *CommentHandler) create(w http.ResponseWriter, r *http.Request, slug string, req *CreateCommentRequest) {
-	l := bloglogic.NewCommentLogic(r.Context(), h.svcCtx)
-	data, code, msg := l.Create(slug, req.ParentID, authmid.GetUser(r.Context()).ID, req.Content)
-	util.Reply(r.Context(), w, data, code, msg)
+	data, code, err := h.commentLogic.Create(r.Context(), slug, req.ParentID, authmid.GetUser(r.Context()), req.Content)
+	util.Reply(r.Context(), w, data, code, err)
 }
 
 // delete removes a comment.
 func (h *CommentHandler) delete(w http.ResponseWriter, r *http.Request, id int64) {
-	l := bloglogic.NewCommentLogic(r.Context(), h.svcCtx)
-	data, code, msg := l.Delete(id, authmid.GetUser(r.Context()))
-	util.Reply(r.Context(), w, data, code, msg)
+	code, err := h.commentLogic.Delete(r.Context(), id, authmid.GetUser(r.Context()))
+	util.Reply(r.Context(), w, nil, code, err)
 }
 
 // list returns the comments for a blog post.
 func (h *CommentHandler) list(w http.ResponseWriter, r *http.Request, slug string) {
-	l := bloglogic.NewCommentLogic(r.Context(), h.svcCtx)
-	data, code, msg := l.List(slug)
-	util.Reply(r.Context(), w, data, code, msg)
+	data, code, err := h.commentLogic.List(r.Context(), slug)
+	util.Reply(r.Context(), w, data, code, err)
 }

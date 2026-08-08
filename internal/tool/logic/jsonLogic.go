@@ -1,35 +1,34 @@
 package logic
 
 import (
-	"context"
 	"encoding/json"
 
-	"cairn.cn/internal/svc"
 	"cairn.cn/internal/util"
 )
 
 // JSONLogic JSON 格式化工具的业务逻辑
-type JSONLogic struct {
-	ctx    context.Context
-	svcCtx *svc.ServiceContext
+type JSONLogic struct{}
+
+type FormatJSONResult struct {
+	Formatted string `json:"formatted"`
 }
 
 // NewJSONLogic 创建 JSONLogic
-func NewJSONLogic(ctx context.Context, svcCtx *svc.ServiceContext) *JSONLogic {
-	return &JSONLogic{ctx: ctx, svcCtx: svcCtx}
+func NewJSONLogic() *JSONLogic {
+	return &JSONLogic{}
 }
 
 // Format 校验并格式化 JSON
-func (l *JSONLogic) Format(input string) (any, util.Code, string) {
+func (l *JSONLogic) Format(input string) (FormatJSONResult, util.Code, error) {
 	var v any
 	if err := json.Unmarshal([]byte(input), &v); err != nil {
-		return nil, util.CodeBadRequest, "invalid JSON: " + err.Error()
+		return FormatJSONResult{}, util.CodeBadRequest, util.NewAppError("invalid JSON: "+err.Error(), err)
 	}
 	out, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
-		return nil, util.CodeInternalError, "failed to format JSON"
+		return FormatJSONResult{}, util.CodeInternalError, util.NewAppError("failed to format JSON", err)
 	}
-	return map[string]string{"formatted": string(out)}, util.CodeSuccess, ""
+	return FormatJSONResult{Formatted: string(out)}, util.CodeSuccess, nil
 }
 
 // Validate 校验 JSON 是否合法

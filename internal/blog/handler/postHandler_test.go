@@ -15,7 +15,7 @@ import (
 	"cairn.cn/internal/auth"
 	authmid "cairn.cn/internal/auth/middleware"
 	"cairn.cn/internal/blog"
-	"cairn.cn/internal/svc"
+	bloglogic "cairn.cn/internal/blog/logic"
 	"cairn.cn/internal/util"
 )
 
@@ -50,8 +50,7 @@ func (f *fakePostRepo) ListPublishedMetadata(context.Context) ([]blog.Post, erro
 
 func apiRouter(repo *fakePostRepo) http.Handler {
 	r := chi.NewRouter()
-	svcCtx := &svc.ServiceContext{PostRepo: repo}
-	r.Route("/api/v1", NewPostHandler(svcCtx).RegisterRoutes)
+	r.Route("/api/v1", NewPostHandler(bloglogic.NewPostLogic(repo)).RegisterRoutes)
 	return r
 }
 
@@ -201,7 +200,7 @@ func TestPostCreate(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/posts", body)
 	w := httptest.NewRecorder()
 
-	handler := NewPostHandler(&svc.ServiceContext{PostRepo: repo})
+	handler := NewPostHandler(bloglogic.NewPostLogic(repo))
 	handler.create(w, r, &CreatePostRequest{
 		Slug: "hello", Title: "Hello", ContentMD: "# Hello",
 	})

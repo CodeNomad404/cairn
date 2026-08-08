@@ -11,7 +11,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"cairn.cn/internal/auth"
-	"cairn.cn/internal/svc"
+	"cairn.cn/internal/auth/logic"
 )
 
 type fakeUserRepo struct {
@@ -40,11 +40,11 @@ func (f *fakeSessionRepo) DeleteExpired(_ context.Context) error    { return nil
 
 func TestLoginSetsCookieAndHidesToken(t *testing.T) {
 	hash, _ := bcrypt.GenerateFromPassword([]byte("correct"), bcrypt.DefaultCost)
-	svcCtx := &svc.ServiceContext{
-		UserRepo:    &fakeUserRepo{user: &auth.User{ID: 1, Username: "alice", Password: string(hash), Role: auth.RoleUser}},
-		SessionRepo: &fakeSessionRepo{},
-	}
-	h := NewAuthHandler(svcCtx, false)
+	authLogic := logic.NewAuthLogic(
+		&fakeUserRepo{user: &auth.User{ID: 1, Username: "alice", Password: string(hash), Role: auth.RoleUser}},
+		&fakeSessionRepo{},
+	)
+	h := NewAuthHandler(authLogic, false)
 
 	body := strings.NewReader(`{"username":"alice","password":"correct"}`)
 	r := httptest.NewRequest(http.MethodPost, "/login", body)
