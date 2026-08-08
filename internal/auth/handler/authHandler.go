@@ -25,8 +25,8 @@ func NewAuthHandler(authLogic *logic.AuthLogic, secureCookies bool) *AuthHandler
 }
 
 func (h *AuthHandler) RegisterRoutes(r chi.Router) {
-	r.Post("/register", util.ParseBody[RegisterRequest](16<<10, h.register))
-	r.Post("/login", util.ParseBody[LoginRequest](16<<10, h.login))
+	r.Post("/register", h.register)
+	r.Post("/login", h.login)
 	r.Post("/logout", h.logout)
 	r.With(authmid.RequireUser).Get("/me", h.me)
 }
@@ -47,7 +47,12 @@ func (r RegisterRequest) Validate() error {
 	return nil
 }
 
-func (h *AuthHandler) register(w http.ResponseWriter, r *http.Request, req *RegisterRequest) {
+func (h *AuthHandler) register(w http.ResponseWriter, r *http.Request) {
+	req, err := util.ParseBody[RegisterRequest](w, r, 16<<10)
+	if err != nil {
+		util.Reply(r.Context(), w, nil, util.CodeBadRequest, err)
+		return
+	}
 	code, err := h.authLogic.Register(r.Context(), req.Username, req.Password)
 	if err != nil {
 		util.Reply(r.Context(), w, nil, code, err)
@@ -79,7 +84,12 @@ func (r LoginRequest) Validate() error {
 	return nil
 }
 
-func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request, req *LoginRequest) {
+func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request) {
+	req, err := util.ParseBody[LoginRequest](w, r, 16<<10)
+	if err != nil {
+		util.Reply(r.Context(), w, nil, util.CodeBadRequest, err)
+		return
+	}
 	result, code, err := h.authLogic.Login(r.Context(), req.Username, req.Password)
 	if err != nil {
 		util.Reply(r.Context(), w, nil, code, err)

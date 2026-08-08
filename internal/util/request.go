@@ -16,109 +16,74 @@ type Validatable interface {
 	Validate() error
 }
 
-// ParseBody returns an http.HandlerFunc that decodes the request body
-// into a value of type T, validates it, and calls next on success.
-// On failure it writes a standard error response and does not call next.
-func ParseBody[T Validatable](maxBytes int64, next func(http.ResponseWriter, *http.Request, *T)) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		req, ok := parseBody[T](w, r, maxBytes)
-		if ok {
-			next(w, r, req)
-		}
-	}
-}
-
-// ParsePathAndBody parses a string path parameter and a validated JSON body.
-func ParsePathAndBody[T Validatable](name string, maxBytes int64, next func(http.ResponseWriter, *http.Request, string, *T)) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		value, ok := pathValue(w, r, name)
-		if !ok {
-			return
-		}
-		req, ok := parseBody[T](w, r, maxBytes)
-		if ok {
-			next(w, r, value, req)
-		}
-	}
-}
-
-// ParsePath passes a non-empty string path parameter to next.
-func ParsePath(name string, next func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		value, ok := pathValue(w, r, name)
-		if ok {
-			next(w, r, value)
-		}
-	}
-}
-
-// ParsePositiveInt64Path parses a positive int64 path parameter and passes it to next.
-func ParsePositiveInt64Path(name string, next func(http.ResponseWriter, *http.Request, int64)) http.HandlerFunc {
-	return ParsePath(name, func(w http.ResponseWriter, r *http.Request, value string) {
-		id, err := strconv.ParseInt(value, 10, 64)
-		if err != nil || id < 1 {
-			Reply(r.Context(), w, nil, CodeBadRequest, NewAppError("参数错误", nil))
-			return
-		}
-		next(w, r, id)
-	})
-}
-
 // Pagination contains validated page query parameters.
 type Pagination struct {
 	Page     int
 	PageSize int
 }
 
-// ParsePagination parses page and page_size, applying the standard defaults and limits.
-func ParsePagination(next func(http.ResponseWriter, *http.Request, Pagination)) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		page, ok := queryInt(r, "page", 1, 1, 0)
-		if !ok {
-			Reply(r.Context(), w, nil, CodeBadRequest, NewAppError("参数错误", nil))
-			return
-		}
-		pageSize, ok := queryInt(r, "page_size", 20, 1, 100)
-		if !ok {
-			Reply(r.Context(), w, nil, CodeBadRequest, NewAppError("参数错误", nil))
-			return
-		}
-		next(w, r, Pagination{Page: page, PageSize: pageSize})
-	}
-}
-
-func parseBody[T Validatable](w http.ResponseWriter, r *http.Request, maxBytes int64) (*T, bool) {
+// ParseBody decodes and validates a JSON request body into a value of type T.
+// It enforces the body size limit, rejects unknown fields and trailing data,
+// and calls Validate on the decoded value. On failure it returns an AppError
+// whose Cause is the underlying decode/validate error; it never writes a
+// response. The caller decides the HTTP status and response body.
+func ParseBody[T Validatable](w http.ResponseWriter, r *http.Request, maxBytes int64) (*T, error) {
 	var req T
 	if err := decodeJSON(w, r, &req, maxBytes); err != nil {
-		Reply(r.Context(), w, nil, CodeBadRequest, NewAppError(err.Error(), err))
-		return nil, false
+		return nil, NewAppError(err.Error(), err)
 	}
 	if err := req.Validate(); err != nil {
-		Reply(r.Context(), w, nil, CodeBadRequest, NewAppError(err.Error(), err))
-		return nil, false
+		return nil, NewAppError(err.Error(), err)
 	}
-	return &req, true
+	return &req, nil
 }
 
-func pathValue(w http.ResponseWriter, r *http.Request, name string) (string, bool) {
+// ParsePath returns the trimmed non-empty value of a chi path parameter.
+func ParsePath(r *http.Request, name string) (string, error) {
 	value := strings.TrimSpace(chi.URLParam(r, name))
 	if value == "" {
-		Reply(r.Context(), w, nil, CodeBadRequest, NewAppError("参数错误", nil))
-		return "", false
+		return "", NewAppError("参数错误", nil)
 	}
-	return value, true
+	return value, nil
 }
 
-func queryInt(r *http.Request, name string, defaultValue, minValue, maxValue int) (int, bool) {
+// ParsePositiveInt64Path parses a positive int64 path parameter.
+func ParsePositiveInt64Path(r *http.Request, name string) (int64, error) {
+	value, err := ParsePath(r, name)
+	if err != nil {
+		return 0, err
+	}
+	id, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || id < 1 {
+		return 0, NewAppError("参数错误", err)
+	}
+	return id, nil
+}
+
+// ParsePagination parses page and page_size, applying the standard defaults
+// (page=1, page_size=20) and limits (page>=1, 1<=page_size<=100).
+func ParsePagination(r *http.Request) (Pagination, error) {
+	page, err := queryInt(r, "page", 1, 1, 0)
+	if err != nil {
+		return Pagination{}, err
+	}
+	pageSize, err := queryInt(r, "page_size", 20, 1, 100)
+	if err != nil {
+		return Pagination{}, err
+	}
+	return Pagination{Page: page, PageSize: pageSize}, nil
+}
+
+func queryInt(r *http.Request, name string, defaultValue, minValue, maxValue int) (int, error) {
 	raw := r.URL.Query().Get(name)
 	if raw == "" {
-		return defaultValue, true
+		return defaultValue, nil
 	}
 	value, err := strconv.Atoi(raw)
 	if err != nil || value < minValue || maxValue > 0 && value > maxValue {
-		return 0, false
+		return 0, NewAppError("参数错误", err)
 	}
-	return value, true
+	return value, nil
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, v any, maxBytes int64) error {

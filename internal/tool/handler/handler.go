@@ -19,7 +19,7 @@ func New(jsonLogic *logic.JSONLogic) *Handler {
 }
 
 func (h *Handler) RegisterRoutes(r chi.Router) {
-	r.Post("/tools/json/format", util.ParseBody[FormatJSONRequest](1<<20, h.format))
+	r.Post("/tools/json/format", h.format)
 }
 
 // FormatJSONRequest is the request body for the JSON formatter.
@@ -31,7 +31,12 @@ func (r FormatJSONRequest) Validate() error {
 	return nil
 }
 
-func (h *Handler) format(w http.ResponseWriter, r *http.Request, req *FormatJSONRequest) {
+func (h *Handler) format(w http.ResponseWriter, r *http.Request) {
+	req, err := util.ParseBody[FormatJSONRequest](w, r, 1<<20)
+	if err != nil {
+		util.Reply(r.Context(), w, nil, util.CodeBadRequest, err)
+		return
+	}
 	data, code, err := h.jsonLogic.Format(req.Input)
 	util.Reply(r.Context(), w, data, code, err)
 }

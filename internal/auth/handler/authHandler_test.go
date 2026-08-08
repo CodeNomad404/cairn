@@ -50,7 +50,7 @@ func TestLoginSetsCookieAndHidesToken(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/login", body)
 	w := httptest.NewRecorder()
 
-	h.login(w, r, &LoginRequest{Username: "alice", Password: "correct"})
+	h.login(w, r)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", w.Code)

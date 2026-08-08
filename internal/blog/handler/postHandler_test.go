@@ -201,9 +201,7 @@ func TestPostCreate(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	handler := NewPostHandler(bloglogic.NewPostLogic(repo))
-	handler.create(w, r, &CreatePostRequest{
-		Slug: "hello", Title: "Hello", ContentMD: "# Hello",
-	})
+	handler.create(w, r)
 
 	if w.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want 201", w.Code)

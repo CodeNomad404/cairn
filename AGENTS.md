@@ -103,7 +103,7 @@ internal/
   blog/                   博客模块 — handler/logic/repository
   tool/                   工具模块 — handler/logic
   config/                 viper 读取 config.yaml + 环境变量
-  util/                   通用请求适配器、参数校验调用和统一 JSON API 响应
+  util/                   通用请求解析函数、参数校验调用和统一 JSON API 响应
   web/                    HTTP 通用基础设施：安全头、限流、代理 IP、站点 URL
   seo/                    robots.txt 和 sitemap.xml
 web/src/                  Vue 3 + TypeScript 前端
@@ -120,8 +120,7 @@ docs/                     项目文档
 HTTP 请求
   → chi Router
   → 认证/授权 Middleware
-  → util 请求适配器（JSON Body、Query、Path）
-  → Handler
+  → Handler（方法内显式调用 util 请求解析函数）
   → Logic（启动时组装一次，方法显式接收 ctx）
   → Repository
   → PostgreSQL
@@ -130,9 +129,9 @@ HTTP 请求
 
 各层职责：
 
-- **Router**：声明路径、HTTP 方法和中间件顺序。需登录或角色的接口在路由层使用 `RequireUser` / `RequireRole`，使鉴权先于请求体解析执行。
-- **util/request.go**：负责所有 HTTP 输入的机械处理，包括 Body、Query 和 Path 参数的读取、默认值、类型转换、大小限制、未知字段检查、调用 DTO 的 `Validate()`，以及解析失败时写入统一错误响应。成功后通过类型安全的回调进入 Handler。该文件只提供通用解析能力，不定义具体业务接口的 DTO，也不包含业务规则。
-- **Handler**：只允许定义请求 DTO（含 `Validate()`）和 Handler 接口方法。Handler 方法获取 util 层已经解析并校验的类型化参数，只负责取得认证上下文、调用 Logic 和调用 `util.Reply`；不得定义 JSON、Query、Path、分页或类型转换等解析辅助函数，不直接访问数据库，也不接收数据库模型后再组装响应。请求 DTO 及其 `Validate()` 必须与对应接口方法放在同一个 Handler 文件内，并紧挨该接口方法，方便阅读接口时立即看到参数契约。
+- **Router**：声明路径、HTTP 方法和中间件顺序。需登录或角色的接口在路由层使用 `RequireUser` / `RequireRole`，使鉴权先于 Handler 内的参数解析执行。
+- **util/request.go**：负责所有 HTTP 输入的机械处理，包括 Body、Query 和 Path 参数的读取、默认值、类型转换、大小限制、未知字段检查、调用 DTO 的 `Validate()`。提供少量稳定的直接解析函数（`ParseBody[T]`、`ParsePath`、`ParsePositiveInt64Path`、`ParsePagination`），由 Handler 方法显式调用；解析失败返回带 Cause 的 `AppError`，不写响应。该文件只提供通用解析能力，不定义具体业务接口的 DTO，也不包含业务规则。
+- **Handler**：只允许定义请求 DTO（含 `Validate()`）和 Handler 接口方法。Handler 方法按接口所需顺序显式调用 `util.ParseBody`、`ParsePath`、`ParsePositiveInt64Path`、`ParsePagination` 完成参数解析，解析失败立即 `util.Reply(r.Context(), w, nil, util.CodeBadRequest, err)` 返回；成功后只负责取得认证上下文、调用 Logic 和调用 `util.Reply`。Handler 中不得直接使用 `chi.URLParam`、`r.URL.Query()`、`strconv`、`json.Decoder`，不得定义解析辅助函数，不直接访问数据库，也不接收数据库模型后再组装响应。请求 DTO 及其 `Validate()` 必须与对应接口方法放在同一个 Handler 文件内，并紧挨该接口方法，方便阅读接口时立即看到参数契约。
 - **Logic**：负责业务规则、业务编排以及最终输出数据的组装。Repository 返回的数据库模型只能在 Logic 内部使用；Logic 必须转换成可直接交给 `util.Reply` 的 `XxxResult`。Logic 在应用启动时组装一次，构造函数只接收其实际使用的 Repository 接口；不保存 `context.Context`，需要 Context 的方法将 `ctx context.Context` 作为第一个参数并传给 Repository。面向 JSON API Handler 的业务方法返回强类型 Result、`util.Code` 和 `error`；无数据操作返回 `util.Code` 和 `error`。
 - **Repository**：封装 PostgreSQL 读写，接收 `context.Context`，不处理 HTTP 响应。
 - **app（Composition Root）**：应用启动时创建 Repository、Logic、Handler 并完成组装；Handler 与 Middleware 接收已经创建好的 Logic，请求过程中不创建 Logic。初始化后只读的组件（Goldmark、Bluemonday Policy）只在启动时初始化一次，可安全并发复用。
@@ -143,9 +142,9 @@ HTTP 请求
 
 1. JSON Body 的 Request DTO 放在对应的 Handler 文件中，实现 `Validate() error`；不要放入 `logic` 包，也不要集中到全局 `dto`、`common` 或 `util` 包。
 2. 新增接口时，按照“Request DTO → `Validate()` → Handler 方法”的顺序紧挨编写，参数定义与使用它的接口不得分散到不同文件。
-3. JSON Body、Query 和 Path 参数统一由 `internal/util/request.go` 中的通用类型化适配器解析。路由把解析成功后的 Handler 作为回调传入；解析或校验失败时适配器直接响应，不进入 Handler。
-4. 有 JSON Body 的路由使用 `util.ParseBody[T](maxBytes, h.callback)`，不在 Handler 方法中重复编写 Decode、Validate、Reply 和 `return`。Query、Path 参数分别使用 `util.ParsePagination`、`util.ParsePath`、`util.ParsePositiveInt64Path` 等同类适配器。
-5. Handler 文件中不得出现 `ParseXxx`、`strconv`、直接读取 `r.URL.Query()` 或 `chi.URLParam()` 等请求解析代码。类似 `ParseListPosts` 的函数属于 request 层职责，不得放在 Handler。
+3. JSON Body、Query 和 Path 参数统一由 `internal/util/request.go` 中的 `ParseBody[T]`、`ParsePath`、`ParsePositiveInt64Path`、`ParsePagination` 解析。Handler 方法按接口所需顺序显式调用；解析失败立即 `util.Reply(r.Context(), w, nil, util.CodeBadRequest, err)` 返回，不进入 Logic。
+4. 路由只声明路径、HTTP 方法和鉴权中间件，直接注册标准 Handler 方法（`func (h *XxxHandler) method(w http.ResponseWriter, r *http.Request)`）。不使用返回 `http.HandlerFunc` 的解析适配器；Body 大小限制、未知字段检查、尾随数据检查与 `Validate()` 仍由 `ParseBody` 统一处理。
+5. Handler 文件中不得出现 `chi.URLParam`、`r.URL.Query()`、`strconv`、`json.Decoder`、Body 大小限制或分页默认值/范围转换等机械解析代码，这些统一由 `Parse*` 负责。不得新增组合解析函数（如 `ParsePathAndBody`）；类似 `ParseListPosts` 的函数属于 request 层职责，不得放在 Handler。
 6. Handler DTO 的 `Validate()` 只校验 HTTP 输入契约，例如必填、长度、格式和取值范围；权限、数据是否存在、唯一性和状态转换等业务规则仍由 Logic 校验。
 7. 鉴权放在 chi 路由中间件中，不在每个 Handler 里重复检查 `user == nil` 或角色。
 8. API 输出结构在 Logic 中命名为 `XxxResult`。Logic 负责从数据库模型挑选字段并组装完整 Result；禁止把 Repository 返回的模型直接交给 Handler，禁止在 Handler 中使用 `data.(*Model)` 后再次加工。
