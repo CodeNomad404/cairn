@@ -11,11 +11,22 @@ const router = useRouter()
 const username = ref('')
 const password = ref('')
 const errorMessage = ref('')
+const isRegister = ref(false)
+
+function toggleMode() {
+  isRegister.value = !isRegister.value
+  errorMessage.value = ''
+}
 
 async function submit() {
   errorMessage.value = ''
   try {
-    await auth.login({ username: username.value, password: password.value })
+    const credentials = { username: username.value, password: password.value }
+    if (isRegister.value) {
+      await auth.register(credentials)
+    } else {
+      await auth.login(credentials)
+    }
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
     await router.replace(redirect)
   } catch (error) {
@@ -30,9 +41,9 @@ async function submit() {
   <main class="auth-page">
     <section class="login-card" aria-labelledby="login-title">
       <RouterLink class="brand" to="/">Cairn</RouterLink>
-      <p class="eyebrow">欢迎回来</p>
-      <h1 id="login-title">登录</h1>
-      <p class="description">登录后即可发表评论和管理文章。</p>
+      <p class="eyebrow">{{ isRegister ? '加入登山' : '欢迎回来' }}</p>
+      <h1 id="login-title">{{ isRegister ? '注册' : '登录' }}</h1>
+      <p class="description">{{ isRegister ? '注册后即可发表评论和管理文章。' : '登录后即可发表评论和管理文章。' }}</p>
 
       <form class="login-form" @submit.prevent="submit">
         <label>
@@ -45,10 +56,14 @@ async function submit() {
         </label>
         <p v-if="errorMessage" class="form-error" role="alert">{{ errorMessage }}</p>
         <button type="submit" :disabled="auth.loading">
-          {{ auth.loading ? '登录中…' : '登录' }}
+          {{ auth.loading ? (isRegister ? '注册中…' : '登录中…') : (isRegister ? '注册' : '登录') }}
         </button>
       </form>
 
+      <p class="switch">
+        {{ isRegister ? '已有账号？' : '没有账号？' }}
+        <a role="button" @click="toggleMode">{{ isRegister ? '去登录' : '去注册' }}</a>
+      </p>
     </section>
   </main>
 </template>
@@ -67,5 +82,7 @@ input:focus { outline: 2px solid var(--accent-focus); border-color: var(--accent
 button { border: 0; border-radius: 8px; padding: 12px; color: #fff; background: var(--accent); font-weight: 600; cursor: pointer; }
 button:disabled { cursor: wait; opacity: .65; }
 .form-error { margin: -4px 0 0; color: var(--danger); font-size: 14px; }
+.switch { margin-top: 24px; text-align: center; color: var(--muted); font-size: 14px; }
+.switch a { color: var(--accent); cursor: pointer; text-decoration: underline; }
 @media (max-width: 480px) { .login-card { padding: 28px 24px; } }
 </style>

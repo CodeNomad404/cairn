@@ -8,6 +8,13 @@ export function login(credentials: Credentials) {
   })
 }
 
+export function register(credentials: Credentials) {
+  return request<User>('/api/v1/auth/register', {
+    method: 'POST',
+    body: JSON.stringify(credentials),
+  })
+}
+
 export function getCurrentUser() {
   return request<User>('/api/v1/auth/me')
 }
