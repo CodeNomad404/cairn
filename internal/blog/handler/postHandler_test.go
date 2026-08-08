@@ -229,7 +229,7 @@ func TestPostCreate(t *testing.T) {
 	}
 }
 
-// Route-level auth tests — go through the chi router so RequireRole is exercised.
+// 路由级认证测试——经由 chi 路由器，以实际执行 RequireRole。
 
 func TestPostCreateRoute_Unauthenticated(t *testing.T) {
 	body := strings.NewReader(`{"slug":"a","title":"A","content_md":"# A"}`)

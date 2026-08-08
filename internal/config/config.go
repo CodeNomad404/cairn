@@ -55,7 +55,7 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
 
-	// Expand ${VAR} in config values
+	// 展开配置值中的 ${VAR}
 	cfg.Database.Password = os.ExpandEnv(cfg.Database.Password)
 	cfg.Database.User = os.ExpandEnv(cfg.Database.User)
 	cfg.Database.Name = os.ExpandEnv(cfg.Database.Name)

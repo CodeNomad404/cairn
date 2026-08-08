@@ -20,7 +20,7 @@ type CommentLogic struct {
 	policy      *bluemonday.Policy
 }
 
-// CommentResult is the complete API output for one comment.
+// CommentResult 是单条评论的完整 API 输出。
 type CommentResult struct {
 	ID        int64           `json:"id"`
 	PostID    int64           `json:"post_id"`
@@ -33,7 +33,7 @@ type CommentResult struct {
 	Replies   []CommentResult `json:"replies,omitempty"`
 }
 
-// CommentListResult is the complete API output for a comment list.
+// CommentListResult 是评论列表的完整 API 输出。
 type CommentListResult struct {
 	Items []CommentResult `json:"items"`
 }

@@ -56,7 +56,7 @@ func TestLoginSetsCookieAndHidesToken(t *testing.T) {
 		t.Fatalf("status = %d, want 200", w.Code)
 	}
 
-	// Cookie must be set.
+	// 必须设置 Cookie。
 	cookies := w.Result().Cookies()
 	var sessionCookie *http.Cookie
 	for _, c := range cookies {
@@ -75,7 +75,7 @@ func TestLoginSetsCookieAndHidesToken(t *testing.T) {
 		t.Fatal("session cookie not HttpOnly")
 	}
 
-	// Token must NOT appear in the JSON response body.
+	// Token 绝不能出现在 JSON 响应体中。
 	var resp map[string]any
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatal(err)

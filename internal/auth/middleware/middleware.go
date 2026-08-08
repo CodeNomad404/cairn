@@ -38,12 +38,12 @@ func GetUser(ctx context.Context) *auth.User {
 	return nil
 }
 
-// WithUser returns a child context with the given user set, for testing.
+// WithUser 返回设置了指定用户的子 context，用于测试。
 func WithUser(ctx context.Context, user *auth.User) context.Context {
 	return context.WithValue(ctx, userKey, user)
 }
 
-// RequireUser rejects requests without an authenticated user.
+// RequireUser 拒绝未认证用户的请求。
 func RequireUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if GetUser(r.Context()) == nil {
@@ -54,7 +54,7 @@ func RequireUser(next http.Handler) http.Handler {
 	})
 }
 
-// RequireRole rejects authenticated users without the required role.
+// RequireRole 拒绝不具备所需角色的已认证用户。
 func RequireRole(role string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

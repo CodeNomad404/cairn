@@ -9,7 +9,7 @@ import (
 	"cairn.cn/internal/tool/logic"
 )
 
-// Handler exposes tool endpoints over HTTP.
+// Handler 通过 HTTP 提供工具端点。
 type Handler struct {
 	jsonLogic *logic.JSONLogic
 }
@@ -22,7 +22,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post("/tools/json/format", h.format)
 }
 
-// FormatJSONRequest is the request body for the JSON formatter.
+// FormatJSONRequest 是 JSON 格式化器的请求体。
 type FormatJSONRequest struct {
 	Input string `json:"input"`
 }

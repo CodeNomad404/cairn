@@ -55,7 +55,7 @@ func (l *AuthLogic) Register(ctx context.Context, username, password string) (ht
 	return httpx.CodeCreated, nil
 }
 
-// LoginResult holds the product of a successful login.
+// LoginResult 保存成功登录的产物。
 type LoginResult struct {
 	Token string
 	User  *auth.User

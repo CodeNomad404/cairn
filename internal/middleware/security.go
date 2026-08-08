@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// SecurityHeaders adds conservative browser security headers to every response.
+// SecurityHeaders 为每个响应添加保守的浏览器安全头。
 func SecurityHeaders(production bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -25,7 +25,7 @@ func SecurityHeaders(production bool) func(http.Handler) http.Handler {
 	}
 }
 
-// SameOrigin rejects browser write requests initiated by another origin.
+// SameOrigin 拒绝由其他源发起的浏览器写请求。
 func SameOrigin() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -38,7 +38,7 @@ func SameOrigin() func(http.Handler) http.Handler {
 	}
 }
 
-// TrustedProxyRealIP accepts forwarded client IPs only from a loopback proxy.
+// TrustedProxyRealIP 只接受来自回环代理的转发客户端 IP。
 func TrustedProxyRealIP() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -84,7 +84,7 @@ func isSameOrigin(r *http.Request) bool {
 		return urlHost(referer) == r.Host
 	}
 
-	// Non-browser clients do not carry browser ambient credentials automatically.
+	// 非浏览器客户端不会自动携带浏览器环境凭据。
 	return true
 }
 

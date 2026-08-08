@@ -8,10 +8,10 @@ import (
 	"net/http"
 )
 
-// Code is a machine-readable response code.
+// Code 是机器可读的响应业务码。
 type Code int
 
-// All response codes.
+// 全部响应业务码。
 const (
 	CodeSuccess          Code = 0
 	CodeCreated          Code = 1
@@ -24,7 +24,7 @@ const (
 	CodeInternalError    Code = 500
 )
 
-// AppError carries a client-safe message while retaining the original cause.
+// AppError 保存可安全返回给客户端的消息，同时保留原始错误原因。
 type AppError struct {
 	Message string
 	cause   error
@@ -45,7 +45,7 @@ func (e *AppError) Unwrap() error {
 	return e.cause
 }
 
-// HTTPStatus maps a Code to its HTTP status code.
+// HTTPStatus 将业务码映射为 HTTP 状态码。
 func (c Code) HTTPStatus() int {
 	switch c {
 	case CodeSuccess:
@@ -69,14 +69,14 @@ func (c Code) HTTPStatus() int {
 	}
 }
 
-// body is the standard JSON response envelope.
+// body 是标准 JSON 响应信封。
 type body struct {
 	Code    int    `json:"code"`
 	Message string `json:"message,omitempty"`
 	Data    any    `json:"data,omitempty"`
 }
 
-// Reply writes a standard JSON response.
+// Reply 写入标准 JSON 响应。
 func Reply(ctx context.Context, w http.ResponseWriter, data any, code Code, err error) {
 	_ = ctx
 

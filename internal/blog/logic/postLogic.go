@@ -25,7 +25,7 @@ type PostLogic struct {
 	policy   *bluemonday.Policy
 }
 
-// PostDetailResult is the complete API output for one post.
+// PostDetailResult 是单篇文章的完整 API 输出。
 type PostDetailResult struct {
 	ID          int64      `json:"id"`
 	Slug        string     `json:"slug"`
@@ -34,7 +34,7 @@ type PostDetailResult struct {
 	ContentHTML string     `json:"content_html"`
 }
 
-// PostSummaryResult is the API output for a post in a list.
+// PostSummaryResult 是文章列表中的单条 API 输出。
 type PostSummaryResult struct {
 	ID          int64      `json:"id"`
 	Slug        string     `json:"slug"`
@@ -42,7 +42,7 @@ type PostSummaryResult struct {
 	PublishedAt *time.Time `json:"published_at"`
 }
 
-// PostListResult is the complete API output for a page of posts.
+// PostListResult 是一页文章列表的完整 API 输出。
 type PostListResult struct {
 	Items    []PostSummaryResult `json:"items"`
 	Page     int                 `json:"page"`

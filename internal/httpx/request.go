@@ -11,22 +11,21 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// Validatable is implemented by request DTOs that define their own API contract.
+// Validatable 由请求 DTO 实现，用于定义各自的 API 参数契约。
 type Validatable interface {
 	Validate() error
 }
 
-// Pagination contains validated page query parameters.
+// Pagination 包含经过校验的分页查询参数。
 type Pagination struct {
 	Page     int
 	PageSize int
 }
 
-// ParseBody decodes and validates a JSON request body into a value of type T.
-// It enforces the body size limit, rejects unknown fields and trailing data,
-// and calls Validate on the decoded value. On failure it returns an AppError
-// whose Cause is the underlying decode/validate error; it never writes a
-// response. The caller decides the HTTP status and response body.
+// ParseBody 将 JSON 请求体解码并校验为类型 T 的值。
+// 它强制 Body 大小上限、拒绝未知字段和尾随数据，并调用解码结果的 Validate。
+// 失败时返回 AppError，其 Cause 为底层的解码/校验错误；它从不写响应，
+// 由调用方决定 HTTP 状态码和响应体。
 func ParseBody[T Validatable](w http.ResponseWriter, r *http.Request, maxBytes int64) (*T, error) {
 	var req T
 	if err := decodeJSON(w, r, &req, maxBytes); err != nil {
@@ -38,7 +37,7 @@ func ParseBody[T Validatable](w http.ResponseWriter, r *http.Request, maxBytes i
 	return &req, nil
 }
 
-// ParsePath returns the trimmed non-empty value of a chi path parameter.
+// ParsePath 返回 chi 路径参数去除首尾空白后的非空值。
 func ParsePath(r *http.Request, name string) (string, error) {
 	value := strings.TrimSpace(chi.URLParam(r, name))
 	if value == "" {
@@ -47,7 +46,7 @@ func ParsePath(r *http.Request, name string) (string, error) {
 	return value, nil
 }
 
-// ParsePositiveInt64Path parses a positive int64 path parameter.
+// ParsePositiveInt64Path 解析一个正的 int64 路径参数。
 func ParsePositiveInt64Path(r *http.Request, name string) (int64, error) {
 	value, err := ParsePath(r, name)
 	if err != nil {
@@ -60,8 +59,8 @@ func ParsePositiveInt64Path(r *http.Request, name string) (int64, error) {
 	return id, nil
 }
 
-// ParsePagination parses page and page_size, applying the standard defaults
-// (page=1, page_size=20) and limits (page>=1, 1<=page_size<=100).
+// ParsePagination 解析 page 和 page_size，应用标准默认值
+// （page=1，page_size=20）和取值范围（page>=1，1<=page_size<=100）。
 func ParsePagination(r *http.Request) (Pagination, error) {
 	page, err := queryInt(r, "page", 1, 1, 0)
 	if err != nil {

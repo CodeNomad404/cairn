@@ -62,7 +62,7 @@ func commentRouter(user *auth.User) http.Handler {
 }
 
 func TestCommentCreateRoute_Unauthenticated(t *testing.T) {
-	// Even with invalid JSON, RequireUser fires first → 401, not 400.
+	// 即使 JSON 无效，RequireUser 也会先触发 → 401，而不是 400。
 	body := strings.NewReader(`not-json`)
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/posts/some-slug/comments", body)
 	w := httptest.NewRecorder()
@@ -106,8 +106,8 @@ func TestCommentDeleteRoute_RejectsInvalidID(t *testing.T) {
 	}
 }
 
-// Direct handler tests — call h.create(w, r) like the router does, so parsing
-// order (Path before Body) is exercised without going through chi.
+// 直接调用 handler 的测试——像路由器一样调用 h.create(w, r)，这样无需经过 chi
+// 即可验证解析顺序（先 Path 后 Body）。
 
 func newCommentHandler() (*CommentHandler, *fakeCommentPostRepo) {
 	repo := &fakeCommentPostRepo{}
@@ -140,7 +140,7 @@ func TestCommentCreateDirect_ParsesPathThenBody(t *testing.T) {
 
 func TestCommentCreateDirect_MissingSlugSkipsLogic(t *testing.T) {
 	h, repo := newCommentHandler()
-	// Path parsing fails first: even a valid body must not reach Logic.
+	// 路径解析先失败：即使是有效 Body 也不得到达 Logic。
 	r := commentCreateRequest(t, "   ", `{"content":"hello"}`)
 	w := httptest.NewRecorder()
 
