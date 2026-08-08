@@ -10,7 +10,7 @@ import (
 	"cairn.cn/internal/auth"
 	authmid "cairn.cn/internal/auth/middleware"
 	bloglogic "cairn.cn/internal/blog/logic"
-	"cairn.cn/internal/util"
+	"cairn.cn/internal/httpx"
 )
 
 // PostHandler exposes blog posts over HTTP.
@@ -50,33 +50,33 @@ func (r CreatePostRequest) Validate() error {
 
 // create adds a blog post.
 func (h *PostHandler) create(w http.ResponseWriter, r *http.Request) {
-	req, err := util.ParseBody[CreatePostRequest](w, r, 1<<20)
+	req, err := httpx.ParseBody[CreatePostRequest](w, r, 1<<20)
 	if err != nil {
-		util.Reply(r.Context(), w, nil, util.CodeBadRequest, err)
+		httpx.Reply(r.Context(), w, nil, httpx.CodeBadRequest, err)
 		return
 	}
 	data, code, err := h.postLogic.Create(r.Context(), req.Slug, req.Title, req.ContentMD)
-	util.Reply(r.Context(), w, data, code, err)
+	httpx.Reply(r.Context(), w, data, code, err)
 }
 
 // list returns published blog posts.
 func (h *PostHandler) list(w http.ResponseWriter, r *http.Request) {
-	pagination, err := util.ParsePagination(r)
+	pagination, err := httpx.ParsePagination(r)
 	if err != nil {
-		util.Reply(r.Context(), w, nil, util.CodeBadRequest, err)
+		httpx.Reply(r.Context(), w, nil, httpx.CodeBadRequest, err)
 		return
 	}
 	data, code, err := h.postLogic.List(r.Context(), pagination.Page, pagination.PageSize)
-	util.Reply(r.Context(), w, data, code, err)
+	httpx.Reply(r.Context(), w, data, code, err)
 }
 
 // get returns one blog post by slug.
 func (h *PostHandler) get(w http.ResponseWriter, r *http.Request) {
-	slug, err := util.ParsePath(r, "slug")
+	slug, err := httpx.ParsePath(r, "slug")
 	if err != nil {
-		util.Reply(r.Context(), w, nil, util.CodeBadRequest, err)
+		httpx.Reply(r.Context(), w, nil, httpx.CodeBadRequest, err)
 		return
 	}
 	data, code, err := h.postLogic.Get(r.Context(), slug)
-	util.Reply(r.Context(), w, data, code, err)
+	httpx.Reply(r.Context(), w, data, code, err)
 }

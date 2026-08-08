@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"cairn.cn/internal/auth"
-	"cairn.cn/internal/util"
+	"cairn.cn/internal/httpx"
 )
 
 func TestRequireRole(t *testing.T) {
@@ -18,8 +18,8 @@ func TestRequireRole(t *testing.T) {
 		wantStatus int
 		wantCode   int
 	}{
-		{name: "unauthenticated", wantStatus: http.StatusUnauthorized, wantCode: int(util.CodeUnauthorized)},
-		{name: "wrong role", user: &auth.User{Role: auth.RoleUser}, wantStatus: http.StatusForbidden, wantCode: int(util.CodeForbidden)},
+		{name: "unauthenticated", wantStatus: http.StatusUnauthorized, wantCode: int(httpx.CodeUnauthorized)},
+		{name: "wrong role", user: &auth.User{Role: auth.RoleUser}, wantStatus: http.StatusForbidden, wantCode: int(httpx.CodeForbidden)},
 		{name: "admin", user: &auth.User{Role: auth.RoleAdmin}, wantStatus: http.StatusNoContent},
 	}
 

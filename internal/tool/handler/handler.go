@@ -5,8 +5,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"cairn.cn/internal/httpx"
 	"cairn.cn/internal/tool/logic"
-	"cairn.cn/internal/util"
 )
 
 // Handler exposes tool endpoints over HTTP.
@@ -32,11 +32,11 @@ func (r FormatJSONRequest) Validate() error {
 }
 
 func (h *Handler) format(w http.ResponseWriter, r *http.Request) {
-	req, err := util.ParseBody[FormatJSONRequest](w, r, 1<<20)
+	req, err := httpx.ParseBody[FormatJSONRequest](w, r, 1<<20)
 	if err != nil {
-		util.Reply(r.Context(), w, nil, util.CodeBadRequest, err)
+		httpx.Reply(r.Context(), w, nil, httpx.CodeBadRequest, err)
 		return
 	}
 	data, code, err := h.jsonLogic.Format(req.Input)
-	util.Reply(r.Context(), w, data, code, err)
+	httpx.Reply(r.Context(), w, data, code, err)
 }

@@ -9,8 +9,13 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	bloglogic "cairn.cn/internal/blog/logic"
-	"cairn.cn/internal/web"
 )
+
+const siteBaseURL = "https://cairn.cn"
+
+func canonicalURL(path string) string {
+	return siteBaseURL + path
+}
 
 // Handler serves SEO endpoints (robots.txt, sitemap.xml).
 type Handler struct {
@@ -29,7 +34,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 func (h *Handler) robots(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=3600")
-	_, _ = w.Write([]byte("User-agent: *\nDisallow: /upload\nDisallow: /healthz\n\nSitemap: " + web.CanonicalURL("/sitemap.xml") + "\n"))
+	_, _ = w.Write([]byte("User-agent: *\nDisallow: /upload\nDisallow: /healthz\n\nSitemap: " + canonicalURL("/sitemap.xml") + "\n"))
 }
 
 type urlSet struct {
@@ -53,11 +58,11 @@ func (h *Handler) sitemap(w http.ResponseWriter, r *http.Request) {
 	paths := []string{"/", "/posts", "/tools", "/tools/json", "/tools/diff"}
 	urls := make([]sitemapURL, 0, len(paths)+len(posts))
 	for _, path := range paths {
-		urls = append(urls, sitemapURL{Location: web.CanonicalURL(path)})
+		urls = append(urls, sitemapURL{Location: canonicalURL(path)})
 	}
 	for _, post := range posts {
 		urls = append(urls, sitemapURL{
-			Location: web.CanonicalURL("/posts/" + url.PathEscape(post.Slug)),
+			Location: canonicalURL("/posts/" + url.PathEscape(post.Slug)),
 			LastMod:  post.UpdatedAt.UTC().Format(time.RFC3339),
 		})
 	}

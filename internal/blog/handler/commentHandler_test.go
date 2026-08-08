@@ -14,7 +14,7 @@ import (
 	authmid "cairn.cn/internal/auth/middleware"
 	"cairn.cn/internal/blog"
 	bloglogic "cairn.cn/internal/blog/logic"
-	"cairn.cn/internal/util"
+	"cairn.cn/internal/httpx"
 )
 
 type fakeCommentPostRepo struct {
@@ -156,7 +156,7 @@ func TestCommentCreateDirect_MissingSlugSkipsLogic(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatal(err)
 	}
-	if resp.Code != int(util.CodeBadRequest) || resp.Message != "参数错误" {
+	if resp.Code != int(httpx.CodeBadRequest) || resp.Message != "参数错误" {
 		t.Fatalf("response = code %d message %q", resp.Code, resp.Message)
 	}
 	if repo.callCount != 0 {
@@ -180,7 +180,7 @@ func TestCommentCreateDirect_BadBodySkipsLogic(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatal(err)
 	}
-	if resp.Code != int(util.CodeBadRequest) {
+	if resp.Code != int(httpx.CodeBadRequest) {
 		t.Fatalf("code = %d, want 400", resp.Code)
 	}
 	if repo.callCount != 0 {

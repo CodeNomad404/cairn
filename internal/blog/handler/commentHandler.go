@@ -9,7 +9,7 @@ import (
 
 	authmid "cairn.cn/internal/auth/middleware"
 	bloglogic "cairn.cn/internal/blog/logic"
-	"cairn.cn/internal/util"
+	"cairn.cn/internal/httpx"
 )
 
 // CommentHandler exposes comment endpoints over HTTP.
@@ -42,38 +42,38 @@ func (r CreateCommentRequest) Validate() error {
 
 // create adds a comment to a blog post.
 func (h *CommentHandler) create(w http.ResponseWriter, r *http.Request) {
-	slug, err := util.ParsePath(r, "slug")
+	slug, err := httpx.ParsePath(r, "slug")
 	if err != nil {
-		util.Reply(r.Context(), w, nil, util.CodeBadRequest, err)
+		httpx.Reply(r.Context(), w, nil, httpx.CodeBadRequest, err)
 		return
 	}
-	req, err := util.ParseBody[CreateCommentRequest](w, r, 32<<10)
+	req, err := httpx.ParseBody[CreateCommentRequest](w, r, 32<<10)
 	if err != nil {
-		util.Reply(r.Context(), w, nil, util.CodeBadRequest, err)
+		httpx.Reply(r.Context(), w, nil, httpx.CodeBadRequest, err)
 		return
 	}
 	data, code, err := h.commentLogic.Create(r.Context(), slug, req.ParentID, authmid.GetUser(r.Context()), req.Content)
-	util.Reply(r.Context(), w, data, code, err)
+	httpx.Reply(r.Context(), w, data, code, err)
 }
 
 // delete removes a comment.
 func (h *CommentHandler) delete(w http.ResponseWriter, r *http.Request) {
-	id, err := util.ParsePositiveInt64Path(r, "id")
+	id, err := httpx.ParsePositiveInt64Path(r, "id")
 	if err != nil {
-		util.Reply(r.Context(), w, nil, util.CodeBadRequest, err)
+		httpx.Reply(r.Context(), w, nil, httpx.CodeBadRequest, err)
 		return
 	}
 	code, err := h.commentLogic.Delete(r.Context(), id, authmid.GetUser(r.Context()))
-	util.Reply(r.Context(), w, nil, code, err)
+	httpx.Reply(r.Context(), w, nil, code, err)
 }
 
 // list returns the comments for a blog post.
 func (h *CommentHandler) list(w http.ResponseWriter, r *http.Request) {
-	slug, err := util.ParsePath(r, "slug")
+	slug, err := httpx.ParsePath(r, "slug")
 	if err != nil {
-		util.Reply(r.Context(), w, nil, util.CodeBadRequest, err)
+		httpx.Reply(r.Context(), w, nil, httpx.CodeBadRequest, err)
 		return
 	}
 	data, code, err := h.commentLogic.List(r.Context(), slug)
-	util.Reply(r.Context(), w, data, code, err)
+	httpx.Reply(r.Context(), w, data, code, err)
 }
