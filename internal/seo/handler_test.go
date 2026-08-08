@@ -32,6 +32,7 @@ func (f fakePostRepo) ListPublished(context.Context, int, int) ([]blogmodel.Post
 func (f fakePostRepo) ListPublishedMetadata(context.Context) ([]blogmodel.Post, error) {
 	return f.posts, f.err
 }
+func (f fakePostRepo) Delete(context.Context, string) error { return nil }
 
 func seoRouter(repo blog.PostRepo) http.Handler {
 	r := chi.NewRouter()

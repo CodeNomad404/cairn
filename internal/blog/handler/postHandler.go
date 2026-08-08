@@ -24,6 +24,7 @@ func NewPostHandler(postLogic *bloglogic.PostLogic) *PostHandler {
 
 func (h *PostHandler) RegisterRoutes(r chi.Router) {
 	r.With(authmid.RequireRole(auth.RoleAdmin)).Post("/posts", h.create)
+	r.With(authmid.RequireRole(auth.RoleAdmin)).Delete("/posts/{slug}", h.delete)
 	r.Get("/posts", h.list)
 	r.Get("/posts/{slug}", h.get)
 }
@@ -79,4 +80,15 @@ func (h *PostHandler) get(w http.ResponseWriter, r *http.Request) {
 	}
 	data, code, err := h.postLogic.Get(r.Context(), slug)
 	httpx.Reply(r.Context(), w, data, code, err)
+}
+
+// delete 软删除一篇博客文章。
+func (h *PostHandler) delete(w http.ResponseWriter, r *http.Request) {
+	slug, err := httpx.ParsePath(r, "slug")
+	if err != nil {
+		httpx.Reply(r.Context(), w, nil, httpx.CodeBadRequest, err)
+		return
+	}
+	code, err := h.postLogic.Delete(r.Context(), slug)
+	httpx.Reply(r.Context(), w, nil, code, err)
 }

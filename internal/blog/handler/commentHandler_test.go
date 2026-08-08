@@ -32,6 +32,7 @@ func (f *fakeCommentPostRepo) ListPublished(_ context.Context, _ int, _ int) ([]
 func (f *fakeCommentPostRepo) ListPublishedMetadata(_ context.Context) ([]blogmodel.Post, error) {
 	return nil, nil
 }
+func (f *fakeCommentPostRepo) Delete(context.Context, string) error { return nil }
 
 type fakeCommentRepo struct {
 	comment *blogmodel.Comment

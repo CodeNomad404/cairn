@@ -9,12 +9,19 @@ import (
 
 var ErrPostNotFound = errors.New("post not found")
 
+// 文章状态常量
+const (
+	PostStatusPublished = "published"
+	PostStatusDeleted   = "deleted"
+)
+
 // PostRepo 定义文章数据访问层必须提供的方法
 type PostRepo interface {
 	Create(ctx context.Context, post *blogmodel.Post) error
 	GetBySlug(ctx context.Context, slug string) (*blogmodel.Post, error)
 	ListPublished(ctx context.Context, limit, offset int) ([]blogmodel.Post, error)
 	ListPublishedMetadata(ctx context.Context) ([]blogmodel.Post, error)
+	Delete(ctx context.Context, slug string) error
 }
 
 // CommentRepo 定义评论数据访问层必须提供的方法

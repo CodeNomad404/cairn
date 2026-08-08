@@ -69,28 +69,6 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 - **语言**：Go 1.26
 - **服务器**：腾讯云轻量 2C2G，上海，Ubuntu 22.04，Docker CE
-- **当前状态**：后端已改为 `/api/v1` JSON API，前端采用 Vue 3；本地开发环境统一使用 Docker Compose，生产部署等待前端适配完成后再设计。
-
-## 常用命令
-
-```bash
-# 启动完整开发环境（前后端热重载）
-docker compose up --build
-
-# 停止或清空本地环境
-docker compose down
-docker compose down -v       # 同时清空本地数据库
-
-# 构建与检查
-docker compose build
-golangci-lint run                    # 代码检查
-go mod tidy                          # 整理依赖
-
-# 验证
-curl http://localhost:8080/healthz   # 检查服务是否正常
-```
-
-Taskfile 快捷命令：`task dev`、`task build`、`task lint`、`task db:up`、`task db:down`、`task db:migrate`、`task tidy`。
 
 ## 项目架构
 

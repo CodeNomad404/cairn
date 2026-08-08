@@ -102,3 +102,19 @@ func (r *PostRepository) ListPublishedMetadata(ctx context.Context) ([]blogmodel
 	}
 	return posts, rows.Err()
 }
+
+// Delete 软删除文章：未处于 deleted 状态时更新为 deleted，保留记录和原 slug。
+func (r *PostRepository) Delete(ctx context.Context, slug string) error {
+	tag, err := r.db.Exec(ctx, `
+		UPDATE posts
+		SET status = $1, updated_at = NOW()
+		WHERE slug = $2 AND status <> $1
+	`, blog.PostStatusDeleted, slug)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("%w: %s", blog.ErrPostNotFound, slug)
+	}
+	return nil
+}

@@ -26,6 +26,10 @@ type fakePostRepo struct {
 	err    error
 	limit  int
 	offset int
+
+	deleteSlug  string
+	deleteCalls int
+	deleteErr   error
 }
 
 func (f *fakePostRepo) Create(_ context.Context, p *blogmodel.Post) error {
@@ -47,6 +51,11 @@ func (f *fakePostRepo) ListPublished(_ context.Context, limit, offset int) ([]bl
 }
 func (f *fakePostRepo) ListPublishedMetadata(context.Context) ([]blogmodel.Post, error) {
 	return nil, nil
+}
+func (f *fakePostRepo) Delete(_ context.Context, slug string) error {
+	f.deleteCalls++
+	f.deleteSlug = slug
+	return f.deleteErr
 }
 
 func apiRouter(repo *fakePostRepo) http.Handler {
@@ -270,5 +279,89 @@ func TestPostCreateRoute_AdminAllowed(t *testing.T) {
 
 	if w.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want 201", w.Code)
+	}
+}
+
+// 路由级删除测试——经由 chi 路由器，以实际执行 RequireRole。
+
+func TestPostDeleteRoute_Unauthenticated(t *testing.T) {
+	repo := &fakePostRepo{}
+	r := httptest.NewRequest(http.MethodDelete, "/api/v1/posts/hello", nil)
+	w := httptest.NewRecorder()
+	apiRouter(repo).ServeHTTP(w, r)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", w.Code)
+	}
+	if repo.deleteCalls != 0 {
+		t.Fatalf("Delete called %d times, want 0", repo.deleteCalls)
+	}
+}
+
+func TestPostDeleteRoute_ForbiddenForUser(t *testing.T) {
+	repo := &fakePostRepo{}
+	r := httptest.NewRequest(http.MethodDelete, "/api/v1/posts/hello", nil)
+	r = r.WithContext(authmid.WithPrincipal(r.Context(), &auth.Principal{ID: 1, Role: auth.RoleUser}))
+	w := httptest.NewRecorder()
+	apiRouter(repo).ServeHTTP(w, r)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", w.Code)
+	}
+	if repo.deleteCalls != 0 {
+		t.Fatalf("Delete called %d times, want 0", repo.deleteCalls)
+	}
+}
+
+func TestPostDeleteRoute_AdminAllowed(t *testing.T) {
+	repo := &fakePostRepo{}
+	r := httptest.NewRequest(http.MethodDelete, "/api/v1/posts/hello", nil)
+	r = r.WithContext(authmid.WithPrincipal(r.Context(), &auth.Principal{ID: 1, Role: auth.RoleAdmin}))
+	w := httptest.NewRecorder()
+	apiRouter(repo).ServeHTTP(w, r)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", w.Code)
+	}
+	if w.Body.Len() != 0 {
+		t.Fatalf("response body = %q, want empty", w.Body.String())
+	}
+	if repo.deleteCalls != 1 {
+		t.Fatalf("Delete called %d times, want 1", repo.deleteCalls)
+	}
+	if repo.deleteSlug != "hello" {
+		t.Fatalf("Delete slug = %q, want %q", repo.deleteSlug, "hello")
+	}
+}
+
+func TestPostDeleteBlankSlug(t *testing.T) {
+	// 路由捕获到空白 slug（编码后的空白 %20），进入 Handler 后 ParsePath 拒绝。
+	repo := &fakePostRepo{}
+	r := httptest.NewRequest(http.MethodDelete, "/api/v1/posts/%20", nil)
+	r = r.WithContext(authmid.WithPrincipal(r.Context(), &auth.Principal{ID: 1, Role: auth.RoleAdmin}))
+	w := httptest.NewRecorder()
+	apiRouter(repo).ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", w.Code)
+	}
+	if repo.deleteCalls != 0 {
+		t.Fatalf("Delete called %d times, want 0", repo.deleteCalls)
+	}
+}
+
+func TestPostDeleteMissingPathSegment(t *testing.T) {
+	// 完全缺少 {slug} 路径段：路由层直接 404，不进入 Handler。
+	repo := &fakePostRepo{}
+	r := httptest.NewRequest(http.MethodDelete, "/api/v1/posts/", nil)
+	r = r.WithContext(authmid.WithPrincipal(r.Context(), &auth.Principal{ID: 1, Role: auth.RoleAdmin}))
+	w := httptest.NewRecorder()
+	apiRouter(repo).ServeHTTP(w, r)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", w.Code)
+	}
+	if repo.deleteCalls != 0 {
+		t.Fatalf("Delete called %d times, want 0", repo.deleteCalls)
 	}
 }

@@ -97,7 +97,7 @@ func (l *PostLogic) Create(ctx context.Context, slug, title, contentMD string) (
 		Title:       title,
 		ContentMD:   contentMD,
 		ContentHTML: safeHTML,
-		Status:      "published",
+		Status:      blog.PostStatusPublished,
 		PublishedAt: &publishedAt,
 	}
 	if err := l.postRepo.Create(ctx, p); err != nil {
@@ -160,4 +160,16 @@ func toPostDetailResult(post *blogmodel.Post) PostDetailResult {
 // ListPublishedMetadata 返回 Sitemap 所需的最小文章元数据（内部方法）。
 func (l *PostLogic) ListPublishedMetadata(ctx context.Context) ([]blogmodel.Post, error) {
 	return l.postRepo.ListPublishedMetadata(ctx)
+}
+
+// Delete 软删除文章；admin 权限已由路由中间件完成。
+func (l *PostLogic) Delete(ctx context.Context, slug string) (httpx.Code, error) {
+	err := l.postRepo.Delete(ctx, slug)
+	if errors.Is(err, blog.ErrPostNotFound) {
+		return httpx.CodeNotFound, httpx.NewAppError("post not found", err)
+	}
+	if err != nil {
+		return httpx.CodeInternalError, httpx.NewAppError("failed to delete post", err)
+	}
+	return httpx.CodeNoContent, nil
 }
