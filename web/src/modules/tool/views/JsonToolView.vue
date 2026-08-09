@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { formatJSON } from '../api/tools'
-import JsonTreeNode from '../../../shared/components/JsonTreeNode.vue'
+import JsonTree from '../../../shared/components/JsonTree.vue'
 import SiteHeader from '../../../shared/components/SiteHeader.vue'
 import SiteFooter from '../../../shared/components/SiteFooter.vue'
 
@@ -9,7 +9,7 @@ const input = ref('')
 const output = ref('')
 const error = ref('')
 const loading = ref(false)
-const maxDepth = ref(2)
+const maxDepth = ref(99)
 
 const parsedOutput = computed(() => {
   if (!output.value) return null
@@ -43,7 +43,7 @@ async function handleFormat() {
       <div class="tool-page">
         <RouterLink class="back" to="/tools">← 返回工具</RouterLink>
         <h1>JSON 格式化</h1>
-        <p class="desc">粘贴一行或压缩过的 JSON，输出可展开折叠的树形结构。</p>
+        <p class="desc">把乱糟糟的 JSON 整理成清晰易读的格式。粘贴代码，点一下按钮就好——结果可以点击箭头展开或收起。</p>
 
         <textarea v-model="input" placeholder='{"hello":"world"}' />
 
@@ -66,10 +66,8 @@ async function handleFormat() {
         </div>
 
         <div v-if="parsedOutput" class="output tree">
-          <JsonTreeNode
-            key-name="root"
-            :value="parsedOutput"
-            :depth="0"
+          <JsonTree
+            :data="parsedOutput"
             :max-depth="maxDepth"
           />
         </div>
@@ -90,7 +88,10 @@ async function handleFormat() {
   background: var(--paper); color: var(--ink); cursor: pointer;
 }
 .tree {
-  padding: 1rem 1.2rem;
+  padding: 0.5rem 0.6rem;
   overflow-x: auto;
+  border: 1px solid var(--binding);
+  border-radius: 6px;
+  background: var(--paper);
 }
 </style>
