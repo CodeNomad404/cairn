@@ -31,7 +31,11 @@ export type Comment = {
   status: string
   created_at: string
   username: string
-  replies: Comment[]
+}
+
+/** 前端自行组装树后的评论节点（API 返回的是扁平列表） */
+export type CommentWithReplies = Comment & {
+  replies: CommentWithReplies[]
 }
 
 export type CommentList = {

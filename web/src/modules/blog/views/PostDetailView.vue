@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useBlogStore } from '../store'
 import { useAuthStore } from '../../auth/store'
-import type { Comment } from '../types'
+import type { CommentWithReplies } from '../types'
 import SiteHeader from '../../../shared/components/SiteHeader.vue'
 import SiteFooter from '../../../shared/components/SiteFooter.vue'
 
 const route = useRoute()
+const router = useRouter()
 const blog = useBlogStore()
 const auth = useAuthStore()
 
@@ -16,6 +17,7 @@ const commentText = ref('')
 const replyTo = ref<number | null>(null)
 const commentError = ref('')
 const submitting = ref(false)
+const deletingPost = ref(false)
 
 onMounted(async () => {
   await blog.loadPost(slug)
@@ -68,7 +70,7 @@ async function submitComment() {
   }
 }
 
-async function handleDelete(id: number) {
+async function handleDeleteComment(id: number) {
   if (!confirm('确定删除这条评论？')) return
   try {
     await blog.removeComment(id, slug)
@@ -77,7 +79,20 @@ async function handleDelete(id: number) {
   }
 }
 
-function canDelete(comment: Comment) {
+async function handleDeletePost() {
+  if (!confirm('确定删除这篇文章？')) return
+  deletingPost.value = true
+  try {
+    await blog.removePost(slug)
+    await router.replace('/')
+  } catch (e: any) {
+    alert(e?.message ?? '删除失败')
+  } finally {
+    deletingPost.value = false
+  }
+}
+
+function canDeleteComment(comment: CommentWithReplies) {
   if (!auth.user) return false
   return auth.user.role === 'admin' || auth.user.id === comment.user_id
 }
@@ -107,6 +122,16 @@ function canDelete(comment: Comment) {
             <div v-html="blog.currentPost.content_html" />
           </article>
 
+          <p v-if="auth.user?.role === 'admin'" style="margin-top: 2rem">
+            <button
+              style="border: 0; background: none; color: var(--blaze); font-family: var(--mono); font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; cursor: pointer;"
+              :disabled="deletingPost"
+              @click="handleDeletePost"
+            >
+              {{ deletingPost ? '删除中…' : '删除文章' }}
+            </button>
+          </p>
+
           <!-- Comments section -->
           <section class="comments">
             <h2>留言</h2>
@@ -133,9 +158,9 @@ function canDelete(comment: Comment) {
               <RouterLink to="/login" style="color: var(--pine)">登录</RouterLink> 后即可留言。
             </p>
 
-            <div v-if="blog.comments.length === 0" class="empty">暂无留言</div>
+            <div v-if="blog.commentTree.length === 0" class="empty">暂无留言</div>
 
-            <div v-for="c in blog.comments" :key="c.id" class="comment">
+            <div v-for="c in blog.commentTree" :key="c.id" class="comment">
               <div class="by">
                 <span class="name">{{ c.username }}</span>
                 · {{ formatDate(c.created_at) }}
@@ -143,9 +168,9 @@ function canDelete(comment: Comment) {
               <div class="body">{{ c.content }}</div>
               <div class="actions">
                 <button v-if="auth.user" @click="replyToComment(c.id, c.username)">回复</button>
-                <button v-if="canDelete(c)" @click="handleDelete(c.id)">删除</button>
+                <button v-if="canDeleteComment(c)" @click="handleDeleteComment(c.id)">删除</button>
               </div>
-              <div v-if="c.replies && c.replies.length" class="replies">
+              <div v-if="c.replies.length" class="replies">
                 <div v-for="r in c.replies" :key="r.id" class="comment">
                   <div class="by">
                     <span class="name">{{ r.username }}</span>
@@ -153,7 +178,7 @@ function canDelete(comment: Comment) {
                   </div>
                   <div class="body">{{ r.content }}</div>
                   <div class="actions">
-                    <button v-if="canDelete(r)" @click="handleDelete(r.id)">删除</button>
+                    <button v-if="canDeleteComment(r)" @click="handleDeleteComment(r.id)">删除</button>
                   </div>
                 </div>
               </div>

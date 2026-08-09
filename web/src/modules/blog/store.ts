@@ -1,8 +1,26 @@
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { fetchPosts, fetchPost } from './api/posts'
+import { fetchPosts, fetchPost, deletePost } from './api/posts'
 import { fetchComments, createComment, deleteComment } from './api/comments'
-import type { PostSummary, PostDetail, PostList, Comment, CreateCommentInput } from './types'
+import type { PostSummary, PostDetail, PostList, Comment, CommentWithReplies, CreateCommentInput } from './types'
+
+function buildTree(flat: Comment[]): CommentWithReplies[] {
+  const byID = new Map<number, CommentWithReplies>()
+  const roots: CommentWithReplies[] = []
+
+  for (const c of flat) {
+    byID.set(c.id, { ...c, replies: [] })
+  }
+  for (const c of flat) {
+    const node = byID.get(c.id)!
+    if (c.parent_id && byID.has(c.parent_id)) {
+      byID.get(c.parent_id)!.replies.push(node)
+    } else {
+      roots.push(node)
+    }
+  }
+  return roots
+}
 
 export const useBlogStore = defineStore('blog', () => {
   const posts = ref<PostSummary[]>([])
@@ -11,6 +29,8 @@ export const useBlogStore = defineStore('blog', () => {
   const page = ref(1)
   const hasMore = ref(false)
   const loading = ref(false)
+
+  const commentTree = computed(() => buildTree(comments.value))
 
   async function loadPosts(pageNum = 1) {
     loading.value = true
@@ -52,5 +72,10 @@ export const useBlogStore = defineStore('blog', () => {
     await loadComments(slug)
   }
 
-  return { posts, currentPost, comments, page, hasMore, loading, loadPosts, loadPost, loadComments, addComment, removeComment }
+  async function removePost(slug: string) {
+    await deletePost(slug)
+    currentPost.value = null
+  }
+
+  return { posts, currentPost, comments, commentTree, page, hasMore, loading, loadPosts, loadPost, loadComments, addComment, removeComment, removePost }
 })
