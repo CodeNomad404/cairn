@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-
 import { APIRequestError } from '../../../shared/api/http'
 import { useAuthStore } from '../store'
 
@@ -38,51 +37,42 @@ async function submit() {
 </script>
 
 <template>
-  <main class="auth-page">
-    <section class="login-card" aria-labelledby="login-title">
-      <RouterLink class="brand" to="/">Cairn</RouterLink>
-      <p class="eyebrow">{{ isRegister ? '加入登山' : '欢迎回来' }}</p>
-      <h1 id="login-title">{{ isRegister ? '注册' : '登录' }}</h1>
-      <p class="description">{{ isRegister ? '注册后即可发表评论和管理文章。' : '登录后即可发表评论和管理文章。' }}</p>
+  <div class="site">
+    <header class="mast">
+      <RouterLink class="mark" to="/">
+        <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="#2A2620" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M10 3 L13 8 H7 Z"/><path d="M6.5 9.5 h7 v2.4 h-7 z"/><path d="M8 12.5 h4 v2.2 h-4 z"/><ellipse cx="10" cy="16.4" rx="5.2" ry="1.3" stroke-width="1.1"/>
+        </svg>
+        Cairn
+      </RouterLink>
+    </header>
 
-      <form class="login-form" @submit.prevent="submit">
-        <label>
-          用户名
-          <input v-model.trim="username" name="username" autocomplete="username" required minlength="2" maxlength="64" />
-        </label>
-        <label>
-          密码
-          <input v-model="password" type="password" name="password" autocomplete="current-password" required minlength="6" />
-        </label>
-        <p v-if="errorMessage" class="form-error" role="alert">{{ errorMessage }}</p>
-        <button type="submit" :disabled="auth.loading">
-          {{ auth.loading ? (isRegister ? '注册中…' : '登录中…') : (isRegister ? '注册' : '登录') }}
-        </button>
-      </form>
+    <main class="auth-page">
+      <section class="login-card" aria-labelledby="login-title">
+        <p class="eyebrow">{{ isRegister ? '加入登山' : '欢迎回来' }}</p>
+        <h1 id="login-title">{{ isRegister ? '注册' : '登录' }}</h1>
+        <p class="description">{{ isRegister ? '注册后即可发表评论和管理文章。' : '登录后即可发表评论和管理文章。' }}</p>
 
-      <p class="switch">
-        {{ isRegister ? '已有账号？' : '没有账号？' }}
-        <a role="button" @click="toggleMode">{{ isRegister ? '去登录' : '去注册' }}</a>
-      </p>
-    </section>
-  </main>
+        <form class="login-form" @submit.prevent="submit">
+          <label>
+            用户名
+            <input v-model.trim="username" name="username" autocomplete="username" required minlength="2" maxlength="64" />
+          </label>
+          <label>
+            密码
+            <input v-model="password" type="password" name="password" autocomplete="current-password" required minlength="6" />
+          </label>
+          <p v-if="errorMessage" class="form-error" role="alert">{{ errorMessage }}</p>
+          <button type="submit" :disabled="auth.loading">
+            {{ auth.loading ? (isRegister ? '注册中…' : '登录中…') : (isRegister ? '注册' : '登录') }}
+          </button>
+        </form>
+
+        <p class="switch">
+          {{ isRegister ? '已有账号？' : '没有账号？' }}
+          <a role="button" @click="toggleMode">{{ isRegister ? '去登录' : '去注册' }}</a>
+        </p>
+      </section>
+    </main>
+  </div>
 </template>
-
-<style scoped>
-.auth-page { min-height: 100svh; display: grid; place-items: center; padding: 24px; }
-.login-card { width: min(100%, 400px); padding: 40px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); }
-.brand { color: var(--accent); font-weight: 700; text-decoration: none; }
-.eyebrow { margin: 32px 0 8px; color: var(--muted); font-size: 14px; }
-h1 { margin: 0; font-size: 32px; letter-spacing: -0.04em; }
-.description { margin: 12px 0 28px; color: var(--muted); }
-.login-form { display: grid; gap: 18px; }
-label { display: grid; gap: 8px; color: var(--text); font-size: 14px; font-weight: 600; }
-input { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 11px 12px; color: var(--text); background: var(--surface); }
-input:focus { outline: 2px solid var(--accent-focus); border-color: var(--accent); }
-button { border: 0; border-radius: 8px; padding: 12px; color: #fff; background: var(--accent); font-weight: 600; cursor: pointer; }
-button:disabled { cursor: wait; opacity: .65; }
-.form-error { margin: -4px 0 0; color: var(--danger); font-size: 14px; }
-.switch { margin-top: 24px; text-align: center; color: var(--muted); font-size: 14px; }
-.switch a { color: var(--accent); cursor: pointer; text-decoration: underline; }
-@media (max-width: 480px) { .login-card { padding: 28px 24px; } }
-</style>
