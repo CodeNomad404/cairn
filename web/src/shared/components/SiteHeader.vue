@@ -14,6 +14,7 @@ const auth = useAuthStore()
     </RouterLink>
     <nav class="nav">
       <RouterLink to="/">手账</RouterLink>
+      <RouterLink v-if="auth.user?.role === 'admin'" to="/posts/new">发文章</RouterLink>
       <RouterLink to="/tools">工具</RouterLink>
       <span class="muted">作品</span>
       <RouterLink v-if="auth.user" to="/login" @click.prevent="auth.logout()">登出</RouterLink>

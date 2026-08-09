@@ -1,8 +1,8 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { fetchPosts, fetchPost, deletePost } from './api/posts'
+import { fetchPosts, fetchPost, createPost, deletePost } from './api/posts'
 import { fetchComments, createComment, deleteComment } from './api/comments'
-import type { PostSummary, PostDetail, PostList, Comment, CommentWithReplies, CreateCommentInput } from './types'
+import type { PostSummary, PostDetail, PostList, Comment, CommentWithReplies, CreateCommentInput, CreatePostInput } from './types'
 
 function buildTree(flat: Comment[]): CommentWithReplies[] {
   const byID = new Map<number, CommentWithReplies>()
@@ -72,10 +72,15 @@ export const useBlogStore = defineStore('blog', () => {
     await loadComments(slug)
   }
 
+  async function addPost(input: CreatePostInput) {
+    const post = await createPost(input)
+    return post
+  }
+
   async function removePost(slug: string) {
     await deletePost(slug)
     currentPost.value = null
   }
 
-  return { posts, currentPost, comments, commentTree, page, hasMore, loading, loadPosts, loadPost, loadComments, addComment, removeComment, removePost }
+  return { posts, currentPost, comments, commentTree, page, hasMore, loading, loadPosts, loadPost, loadComments, addComment, removeComment, addPost, removePost }
 })
