@@ -10,6 +10,10 @@ Production layout:
 
 ## First deployment
 
+The server needs Git, Go 1.26.3, Node.js 24 LTS with npm, golang-migrate,
+rsync, Caddy, Docker, PostgreSQL client tools, curl, and Python 3. Use an LTS
+Node.js release in production; Vite's preview server is not a production server.
+
 ```bash
 sudo useradd --system --home /opt/cairn --shell /usr/sbin/nologin cairn
 sudo mkdir -p /opt/cairn /etc/cairn /var/backups/cairn
@@ -103,11 +107,12 @@ Then run it from the repository root:
 
 The script does not inspect, commit, or push the local Git repository. It only
 connects to the server. The server clones or updates `master` in its source cache
-at `/opt/cairn-repo`, downloads dependencies, tests, builds, backs up PostgreSQL,
-runs forward migrations, installs the new binary, restarts the service, and
+at `/opt/cairn-repo`, downloads dependencies, runs Go tests, builds the Go binary
+and Vue production assets, backs up PostgreSQL, runs forward migrations,
+atomically installs the new backend and frontend, restarts the service, and
 checks `/healthz`. No source files are uploaded from the local machine. If the
-health check fails, it restores the previous binary. Applied database migrations
-are deliberately not rolled back.
+health check fails, it restores the previous binary and frontend assets. Applied
+database migrations are deliberately not rolled back.
 
 Use another configuration file when needed:
 

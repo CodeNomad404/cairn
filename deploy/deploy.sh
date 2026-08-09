@@ -79,13 +79,25 @@ readonly current_binary="${REMOTE_APP_DIR}/bin/cairn"
 readonly new_binary="/tmp/cairn-${RELEASE_ID}"
 readonly install_binary="${REMOTE_APP_DIR}/bin/cairn.new.${RELEASE_ID}"
 readonly old_binary="${REMOTE_APP_DIR}/bin/cairn.${RELEASE_ID}"
+readonly current_frontend="${REMOTE_APP_DIR}/web/dist"
+readonly new_frontend="${REMOTE_APP_DIR}/web/dist.new.${RELEASE_ID}"
+readonly old_frontend="${REMOTE_APP_DIR}/web/dist.${RELEASE_ID}"
 binary_replaced=false
+frontend_replaced=false
 
 rollback() {
   exit_code=$?
   trap - ERR
   rm -f "${new_binary}"
   sudo rm -f "${install_binary}"
+  sudo rm -rf "${new_frontend}"
+
+  if [[ "${frontend_replaced}" == true ]]; then
+    sudo rm -rf "${current_frontend}"
+    if [[ -d "${old_frontend}" ]]; then
+      sudo mv "${old_frontend}" "${current_frontend}"
+    fi
+  fi
 
   if [[ "${binary_replaced}" == true && -f "${old_binary}" ]]; then
     printf '\nDeployment failed; restoring the previous binary...\n' >&2
@@ -102,7 +114,7 @@ rollback() {
 }
 trap rollback ERR
 
-for command_name in git go migrate rsync curl python3; do
+for command_name in git go node npm migrate rsync curl python3; do
   command -v "${command_name}" >/dev/null 2>&1 || {
     printf 'missing required server command: %s\n' "${command_name}" >&2
     exit 1
@@ -138,6 +150,8 @@ cd "${REMOTE_REPO_DIR}"
 go mod download
 go test ./...
 go build -trimpath -ldflags='-s -w' -o "${new_binary}" ./cmd/server
+npm --prefix web ci --no-audit --no-fund
+npm --prefix web run build
 
 sudo systemctl start cairn-backup.service
 
@@ -157,22 +171,36 @@ if [[ -f "${current_binary}" ]]; then
   sudo cp --preserve=mode,ownership,timestamps "${current_binary}" "${old_binary}"
 fi
 
-for directory in cmd internal web migrations deploy; do
+for directory in cmd internal migrations deploy; do
   sudo mkdir -p "${REMOTE_APP_DIR}/${directory}"
   sudo rsync -a --delete "${REMOTE_REPO_DIR}/${directory}/" "${REMOTE_APP_DIR}/${directory}/"
 done
+sudo mkdir -p "${REMOTE_APP_DIR}/web"
+sudo rsync -a --delete --exclude 'dist/' "${REMOTE_REPO_DIR}/web/" "${REMOTE_APP_DIR}/web/"
 for file in go.mod go.sum config.yaml docker-compose.yml; do
   sudo install -o cairn -g cairn -m 0644 "${REMOTE_REPO_DIR}/${file}" "${REMOTE_APP_DIR}/${file}"
 done
+
+sudo mkdir -p "${new_frontend}"
+sudo rsync -a --delete "${REMOTE_REPO_DIR}/web/dist/" "${new_frontend}/"
+sudo chown -R cairn:cairn "${new_frontend}"
 
 sudo install -o cairn -g cairn -m 0755 "${new_binary}" "${install_binary}"
 sudo mv "${install_binary}" "${current_binary}"
 rm -f "${new_binary}"
 binary_replaced=true
+
+if [[ -d "${current_frontend}" ]]; then
+  sudo mv "${current_frontend}" "${old_frontend}"
+fi
+sudo mv "${new_frontend}" "${current_frontend}"
+frontend_replaced=true
+
 sudo systemctl restart "${service}"
 
 curl --fail --silent --show-error --retry 15 --retry-delay 1 --retry-connrefused \
   http://127.0.0.1:8080/healthz >/dev/null
+sudo test -s "${current_frontend}/index.html"
 sudo systemctl is-active --quiet "${service}"
 
 trap - ERR
