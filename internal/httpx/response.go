@@ -13,15 +13,15 @@ type Code int
 
 // 全部响应业务码。
 const (
-	CodeSuccess          Code = 0
-	CodeCreated          Code = 1
-	CodeNoContent        Code = 2
-	CodeBadRequest       Code = 400
-	CodeUnauthorized     Code = 401
-	CodeForbidden        Code = 403
-	CodeNotFound         Code = 404
-	CodeValidationFailed Code = 422
-	CodeInternalError    Code = 500
+	CodeSuccess          Code = 0   // 成功
+	CodeCreated          Code = 1   // 创建成功
+	CodeNoContent        Code = 2   // 无内容
+	CodeBadRequest       Code = 400 // 请求参数错误
+	CodeUnauthorized     Code = 401 // 未认证
+	CodeForbidden        Code = 403 // 无权限
+	CodeNotFound         Code = 404 // 资源不存在
+	CodeValidationFailed Code = 422 // 验证失败
+	CodeInternalError    Code = 500 // 内部错误
 )
 
 // AppError 保存可安全返回给客户端的消息，同时保留原始错误原因。
