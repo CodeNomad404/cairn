@@ -4,5 +4,34 @@ www.cairn.cn {
 
 cairn.cn {
 	encode zstd gzip
-	reverse_proxy 127.0.0.1:8080
+
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	handle /healthz {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	handle /robots.txt {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	handle /sitemap.xml {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	handle {
+		root * /opt/cairn/web/dist
+		header {
+			Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+			Referrer-Policy "strict-origin-when-cross-origin"
+			X-Content-Type-Options "nosniff"
+			X-Frame-Options "DENY"
+			Permissions-Policy "camera=(), microphone=(), geolocation=()"
+			Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		}
+		try_files {path} /index.html
+		file_server
+	}
 }
