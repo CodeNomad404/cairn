@@ -1,0 +1,60 @@
+/* Cairn — tool module styles
+   Tool listing and individual tool pages. */
+
+/* ---------- tools list ---------- */
+.tools-intro { padding: clamp(2rem, 6vw, 4rem) 0 2rem; padding-left: clamp(4.4rem, 13vw, 10.5rem); }
+.tools-intro .eyebrow {
+  font-family: var(--hand); font-size: 1.5rem; color: var(--blaze);
+  transform: rotate(-2deg); display: inline-block; margin-bottom: .3rem;
+}
+.tools-intro h1 { font-family: var(--serif); font-weight: 500; font-size: clamp(2rem, 4.6vw, 3rem); letter-spacing: -.01em; margin: 0 0 1rem; }
+.tools-intro .lede { color: var(--faded); max-width: 40ch; font-size: 1rem; }
+
+.tool-list { padding: 0 0 3rem clamp(4.4rem, 13vw, 10.5rem); display: grid; gap: 1.5rem; max-width: calc(var(--measure) + 8rem); }
+.tool-card {
+  display: block; text-decoration: none; color: inherit;
+  padding: 1.5rem 1.8rem; border: 1px solid var(--rule); border-radius: 4px;
+  transition: background-color .3s ease, border-color .3s ease;
+}
+.tool-card:hover { background: color-mix(in srgb, var(--paper-2) 55%, transparent); border-color: var(--binding); }
+.tool-card h2 { font-family: var(--serif); font-weight: 500; font-size: 1.3rem; margin: 0 0 .4rem; transition: color .25s ease; }
+.tool-card:hover h2 { color: var(--pine); }
+.tool-card p { color: var(--faded); font-size: .9rem; margin: 0; }
+
+/* ---------- individual tool page ---------- */
+.tool-page { padding: clamp(2rem, 6vw, 4rem) 0 4rem; padding-left: clamp(4.4rem, 13vw, 10.5rem); max-width: calc(var(--measure) + 14rem); }
+.tool-page .back {
+  font-family: var(--mono); font-size: .72rem; letter-spacing: .08em;
+  color: var(--faded); text-decoration: none; display: inline-block; margin-bottom: 2rem;
+}
+.tool-page .back:hover { color: var(--blaze); }
+.tool-page h1 { font-family: var(--serif); font-weight: 500; font-size: clamp(1.8rem, 4vw, 2.6rem); letter-spacing: -.01em; margin: 0 0 .6rem; }
+.tool-page .desc { color: var(--faded); margin: 0 0 2rem; }
+.tool-page textarea {
+  width: 100%; min-height: 16rem; padding: 1rem 1.2rem;
+  border: 1px solid var(--binding); border-radius: 4px;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--mono); font-size: .85rem; line-height: 1.7;
+  resize: vertical;
+}
+.tool-page textarea:focus { outline: 2px solid var(--pine); border-color: var(--pine); }
+.tool-page .row { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; }
+.tool-page .row button {
+  border: 0; border-radius: 4px; padding: .7rem 1.6rem;
+  background: var(--ink); color: var(--paper);
+  font-family: var(--mono); font-size: .72rem; letter-spacing: .08em;
+  text-transform: uppercase; cursor: pointer;
+}
+.tool-page .row button:hover { background: var(--pine); }
+.tool-page .tool-error { color: var(--blaze); font-size: .85rem; }
+.tool-page .output { margin-top: 2rem; }
+.tool-page .output pre {
+  background: #26221B; color: #ECE6D6; font-family: var(--mono);
+  font-size: .82rem; line-height: 1.7; padding: 1.1rem 1.3rem;
+  border-radius: 3px; overflow-x: auto;
+}
+
+/* ---------- tools responsive ---------- */
+@media (max-width: 720px) {
+  .tools-intro, .tool-list, .tool-page { padding-left: 3.4rem; }
+}

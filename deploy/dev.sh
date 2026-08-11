@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 if ! docker info >/dev/null 2>&1; then
   echo "Docker is not running. Start Docker Desktop and try again." >&2

@@ -14,6 +14,9 @@ deploy/deploy.env
 .DS_Store
 *.log
 
+# Personal scripts (may contain credentials)
+claude-deepseek.ps1
+
 # Node
 node_modules/
 

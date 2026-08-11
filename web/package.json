@@ -3,10 +3,11 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "packageManager": "pnpm@11.15.0",
   "scripts": {
     "dev": "vite",
     "type-check": "vue-tsc --noEmit",
-    "build": "npm run type-check && vite build",
+    "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview"
   },
   "dependencies": {

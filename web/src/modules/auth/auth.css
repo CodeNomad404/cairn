@@ -1,0 +1,36 @@
+/* Cairn — auth module styles
+   Login / register page. */
+
+.auth-page { min-height: 100svh; display: grid; place-items: center; padding: 24px; }
+.login-card {
+  width: min(100%, 420px); padding: 44px 40px;
+  border: 1px solid var(--binding); border-radius: 4px;
+  background: var(--paper); box-shadow: 0 2px 20px rgb(42 38 32 / 6%);
+}
+.login-card .brand {
+  font-family: var(--serif); font-weight: 600; font-size: 1.4rem;
+  color: var(--ink); text-decoration: none; display: inline-flex; align-items: center; gap: .5rem;
+}
+.login-card .eyebrow { margin: 36px 0 6px; color: var(--faded); font-family: var(--hand); font-size: 1.3rem; transform: rotate(-2deg); display: inline-block; }
+.login-card h1 { margin: 0 0 10px; font-family: var(--serif); font-weight: 500; font-size: 2rem; letter-spacing: -.02em; }
+.login-card .description { margin: 0 0 28px; color: var(--faded); font-size: .95rem; }
+.login-form { display: grid; gap: 18px; }
+.login-form label { display: grid; gap: 6px; color: var(--ink); font-size: .85rem; font-family: var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+.login-form input {
+  width: 100%; border: 1px solid var(--binding); border-radius: 4px;
+  padding: 11px 12px; color: var(--ink); background: var(--paper);
+  font-family: var(--sans); font-size: 1rem;
+}
+.login-form input:focus { outline: 2px solid var(--pine); border-color: var(--pine); }
+.login-form button {
+  border: 0; border-radius: 4px; padding: 12px;
+  color: var(--paper); background: var(--ink);
+  font-family: var(--mono); font-size: .75rem; letter-spacing: .1em;
+  text-transform: uppercase; font-weight: 600; cursor: pointer;
+}
+.login-form button:hover { background: var(--pine); }
+.login-form button:disabled { cursor: wait; opacity: .65; }
+.form-error { margin: -4px 0 0; color: var(--blaze); font-size: .85rem; }
+.switch { margin-top: 28px; text-align: center; color: var(--faded); font-size: .9rem; }
+.switch a { color: var(--pine); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+@media (max-width: 480px) { .login-card { padding: 32px 24px; } }

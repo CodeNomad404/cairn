@@ -1,4 +1,4 @@
-# AGENTS.md
+# AGENTS_TO_FRONT.md
 
 Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 
@@ -63,127 +63,172 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
-## 项目概况
 
-**Cairn**（`cairn.cn`）— 个人博客 + 作品集 + 工具站。名字来自山野里用石头堆的路标（trail cairns）。
+## 项目与技术栈
 
-- **语言**：Go 1.26
-- **服务器**：腾讯云轻量 2C2G，上海，Ubuntu 22.04，Docker CE
+Cairn（`cairn.cn`）是个人博客、作品集和工具站。前端位于 `web/`，使用 Vue 3、TypeScript、Vue Router、Pinia、Vite 和原生 `fetch`，通过相对地址 `/api/v1/...` 调用 Go 后端。
 
-## 项目架构
+除非明确要求，不引入 Axios、UI 组件库、服务端数据缓存库、运行时类型库、微前端或自动生成 API Client。
 
-```
-cmd/server/main.go        进程入口 — 启动 HTTP Server、优雅关闭
-cmd/seed/main.go          开发数据初始化
-internal/
-  app/                    应用组装（Composition Root）— 创建数据库、Repository、Logic、Handler 和 chi Router
-  auth/                   认证模块 — handler/logic/repository/middleware；model/ 按表拆文件（user.go、session.go）
-  blog/                   博客模块 — handler/logic/repository；model/ 按表拆文件（post.go、comment.go）
-  tool/                   工具模块 — handler/logic
-  config/                 viper 读取 config.yaml + 环境变量
-  httpx/                  JSON HTTP 请求解析、业务码、AppError 和统一 JSON API 响应
-  middleware/             业务无关的全局 HTTP Middleware：安全头、限流、代理 IP
-  seo/                    robots.txt 和 sitemap.xml（canonical 站点 URL 为包内私有常量）
-web/src/                  Vue 3 + TypeScript 前端
-migrations/               golang-migrate SQL 迁移脚本
-docker-compose.yml        本地开发环境
-docs/                     项目文档
-```
-
-### 后端分层与调用链
-
-后端是按业务模块组织的模块化单体，不是微服务。JSON API 的标准调用链为：
+## 目录结构
 
 ```text
-HTTP 请求
-  → chi Router
-  → 认证/授权 Middleware
-  → Handler（方法内显式调用 httpx 请求解析函数）
-  → Logic（启动时组装一次，方法显式接收 ctx）
-  → Repository
-  → PostgreSQL
-  → httpx.Reply
+web/src/
+├── main.ts                    # 启动入口
+├── assets/                    # Vite 构建资源
+├── app/                       # 应用装配
+│   ├── App.vue
+│   ├── router/                # 路由、Layout、守卫
+│   ├── layouts/               # 应用级骨架
+│   └── components/            # 应用级组件
+├── modules/                   # 业务模块
+│   └── <module>/
+│       ├── index.ts           # 模块对外入口
+│       ├── api/               # 后端接口
+│       ├── views/             # 路由页面
+│       ├── components/        # 业务组件
+│       ├── composables/       # 可复用状态逻辑
+│       ├── store.ts           # 可选：跨页面状态
+│       └── types.ts           # Request、Result、共享类型
+└── shared/                    # 无业务含义的底层能力
+    ├── api/
+    ├── styles/
+    └── <capability>/          # 按明确能力命名
 ```
 
-各层职责：
+目录按需创建，不机械补齐。`web/public/` 保存固定公开 URL 资源，`src/assets/` 保存经 Vite 导入构建的资源。
 
-- **Router**：声明路径、HTTP 方法和中间件顺序。需登录或角色的接口在路由层使用 `RequireUser` / `RequireRole`，使鉴权先于 Handler 内的参数解析执行。
-- **httpx/request.go**：负责所有 HTTP 输入的机械处理，包括 Body、Query 和 Path 参数的读取、默认值、类型转换、大小限制、未知字段检查、调用 DTO 的 `Validate()`。提供少量稳定的直接解析函数（`ParseBody[T]`、`ParsePath`、`ParsePositiveInt64Path`、`ParsePagination`），由 Handler 方法显式调用；解析失败返回 `AppError`（存在底层错误时通过 Cause 保留），不写响应。该文件只提供通用解析能力，不定义具体业务接口的 DTO，也不包含业务规则。
-- **Handler**：只允许定义请求 DTO（含 `Validate()`）和 Handler 接口方法。Handler 方法按接口所需顺序显式调用 `httpx.ParseBody`、`httpx.ParsePath`、`httpx.ParsePositiveInt64Path`、`httpx.ParsePagination` 完成参数解析，解析失败立即 `httpx.Reply(r.Context(), w, nil, httpx.CodeBadRequest, err)` 返回；成功后只负责取得认证上下文、调用 Logic 和调用 `httpx.Reply`。Handler 中不得直接使用 `chi.URLParam`、`r.URL.Query()`、`strconv`、`json.Decoder`，不得定义解析辅助函数，不直接访问数据库，也不接收数据库模型后再组装响应。请求 DTO 及其 `Validate()` 必须与对应接口方法放在同一个 Handler 文件内，并紧挨该接口方法，方便阅读接口时立即看到参数契约。
-- **Logic**：负责业务规则、业务编排以及最终输出数据的组装。Repository 返回的数据库模型只能在 Logic 内部使用；Logic 必须转换成可直接交给 `httpx.Reply` 的 `XxxResult`。Logic 在应用启动时组装一次，构造函数只接收其实际使用的 Repository 接口；不保存 `context.Context`，需要 Context 的方法将 `ctx context.Context` 作为第一个参数并传给 Repository。面向 JSON API Handler 的业务方法返回强类型 Result、`httpx.Code` 和 `error`；无数据操作返回 `httpx.Code` 和 `error`。
-- **Repository**：封装 PostgreSQL 读写，接收 `context.Context`，不处理 HTTP 响应。
-- **app（Composition Root）**：应用启动时创建 Repository、Logic、Handler 并完成组装；Handler 与 Middleware 接收已经创建好的 Logic，请求过程中不创建 Logic。初始化后只读的组件（Goldmark、Bluemonday Policy）只在启动时初始化一次，可安全并发复用。
-- **httpx/response.go**：集中定义业务码、`AppError` 和 `httpx.Reply(ctx, w, data, code, err)`。`AppError` 保存可安全公开的消息和原始 Cause；`Reply` 负责业务码到 HTTP 状态的映射、JSON 信封以及未知错误的 500 兜底。Handler 不自行拼装 JSON 错误响应。
-- **middleware**：只保存与具体业务模块无关的全局 HTTP Middleware（`SecurityHeaders`、`SameOrigin`、`TrustedProxyRealIP`、`RateLimit`）。认证 Middleware（`LoadUser`、`GetPrincipal`、`WithPrincipal`、`RequireUser`、`RequireRole`）依赖认证身份模型 `auth.Principal`、会话模型（`auth/model.Session`）和 `AuthLogic`，继续属于 `auth/middleware`。SEO 使用的固定 canonical 站点 URL（`https://cairn.cn`）是 `seo` 包内私有实现，不属于公共包。
+## 依赖与职责
 
-### JSON API 开发约定
-
-1. JSON Body 的 Request DTO 放在对应的 Handler 文件中，实现 `Validate() error`；不要放入 `logic` 包，也不要集中到全局 `dto`、`common` 或 `httpx` 包。
-2. 新增接口时，按照“Request DTO → `Validate()` → Handler 方法”的顺序紧挨编写，参数定义与使用它的接口不得分散到不同文件。
-3. JSON Body、Query 和 Path 参数统一由 `internal/httpx/request.go` 中的 `ParseBody[T]`、`ParsePath`、`ParsePositiveInt64Path`、`ParsePagination` 解析。Handler 方法按接口所需顺序显式调用；解析失败立即 `httpx.Reply(r.Context(), w, nil, httpx.CodeBadRequest, err)` 返回，不进入 Logic。
-4. 路由只声明路径、HTTP 方法和鉴权中间件，直接注册标准 Handler 方法（`func (h *XxxHandler) method(w http.ResponseWriter, r *http.Request)`）。不使用返回 `http.HandlerFunc` 的解析适配器；Body 大小限制、未知字段检查、尾随数据检查与 `Validate()` 仍由 `ParseBody` 统一处理。
-5. Handler 文件中不得出现 `chi.URLParam`、`r.URL.Query()`、`strconv`、`json.Decoder`、Body 大小限制或分页默认值/范围转换等机械解析代码，这些统一由 `Parse*` 负责。不得新增组合解析函数（如 `ParsePathAndBody`）；类似 `ParseListPosts` 的函数属于 request 层职责，不得放在 Handler。
-6. Handler DTO 的 `Validate()` 只校验 HTTP 输入契约，例如必填、长度、格式和取值范围；权限、数据是否存在、唯一性和状态转换等业务规则仍由 Logic 校验。
-7. 鉴权放在 chi 路由中间件中，不在每个 Handler 里重复检查 `principal == nil` 或角色。
-8. API 输出结构在 Logic 中命名为 `XxxResult`。Logic 负责从数据库模型挑选字段并组装完整 Result；禁止把 Repository 返回的模型直接交给 Handler，禁止在 Handler 中使用 `data.(*Model)` 后再次加工。
-9. Handler 调用 Logic 时使用 `data, code, err := l.Method(...)`，并立即调用 `httpx.Reply(r.Context(), w, data, code, err)`；无数据操作只接收 `code, err` 并传入 `nil` data，Cookie 等必须由 HTTP 层处理的副作用除外。
-10. `healthz`、`robots.txt`、`sitemap.xml` 不是 JSON 业务 API，可按各自协议直接输出原始 JSON、文本或 XML，不强制使用 `httpx.Reply`。
-11. 新模块遵循相同的 `handler/logic/repository` 结构；只在真正需要持久化时增加 Repository。
-
-### API 接口文档约定
-
-接口文档位于 `cairn-api.wiki/`，面向前端开发，只记录请求契约、成功响应、前端需要处理的预期失败和鉴权行为，不展开数据库或后端内部实现。
-
-1. JSON 业务接口页统一按“接口 → 请求参数 → 请求示例 → 成功响应 → 失败响应”组织。没有 JSON Body 时可省略请求示例；没有需要前端处理的预期失败时可省略失败响应。
-2. “接口”章节使用真实 HTTP 方法和完整路径，例如 `POST /api/v1/auth/login`。
-3. 请求参数表统一使用“参数｜位置｜类型｜必填｜默认值｜约束｜示例”。位置使用 `Path`、`Query`、`Body`、`Header` 或 `Cookie`；必填使用“是/否”；没有默认值时写 `—`。
-4. 默认值表示参数未传时后端实际采用的值，示例只说明格式，两者不得合并。长度、范围、格式等输入契约统一写在“约束”列，不再通过重复错误示例说明。
-5. 没有请求参数时直接写“无”，不保留空表格或“待编写”占位行。有 JSON Body 时提供可直接用于联调的完整 JSON 请求示例。
-6. 成功响应必须标明 HTTP 状态并给出与实际实现完全一致的响应体。`204 No Content` 明确写“无响应体”，不得提供空 JSON 示例。
-7. 不设置独立的 `Error code` 章节或错误码索引页。HTTP 状态和响应中的数字 `code` 直接写在对应的失败响应中，不维护重复对照表。
-8. 接口页只记录用户正常操作时可能遇到、且前端需要处理的预期失败，例如凭据错误、用户名已注册、会话失效、权限不足、资源不存在或用户输入内容不合法。
-9. 缺少必填参数、JSON 损坏、字段类型错误、未知字段、Path/Query 解析失败和错误 HTTP 方法属于调用方开发错误，不在每个接口页逐项展示；参数约束本身仍须完整记录。此类通用行为需要说明时集中放在 `api/schema.md`。
-10. 数据库异常等内部错误不在接口页逐项列出，不向客户端或文档暴露底层 Cause；前端统一展示安全的兜底文案，具体原因仅进入服务端日志。
-11. Session Cookie 的名称、有效期、`Path`、`HttpOnly`、`SameSite`、生产环境 `Secure` 等统一写在 `api/schema.md`。登录和注册页只说明成功后创建会话并链接该章节；不得记录完整 Session Token，只能使用 `<session-token>` 占位符。
-12. `robots.txt`、`sitemap.xml`、`healthz` 和 `204` 响应按真实协议记录，不套用固定 JSON 模板；代码块语言分别使用 `text`、`xml`、`json`，无响应体时不使用代码块。
-13. 修改接口时必须同步核对实现、`api/openapi.yaml`、Wiki、前端请求代码和 TypeScript 类型，确保方法、路径、参数、约束、状态码、响应字段及 Cookie 行为一致。
-
-### 领域模型、认证身份与 API Result 边界
-
-- 持久化模型位于各自模块的 `model` 子包，一张数据库表对应一个生产 model 文件：
+依赖方向：
 
 ```text
-internal/auth/model/
-  user.go       users 表记录模型
-  session.go    sessions 表记录模型
-internal/blog/model/
-  post.go       posts 表记录模型
-  comment.go    comments 表记录模型
+main → app → modules → shared
 ```
 
-  model 文件只保存该表对应的数据结构，只依赖标准库，不声明 JSON 标签，不承担 JSON API 契约。该按表拆文件规则只针对数据库 Model；A11 驳回的是"按接口拆分 Handler 文件"，两者不冲突。
-- Repository 接口（`UserRepo`、`SessionRepo`、`PostRepo`、`CommentRepo`）留在模块根包，方法参数与返回值使用对应 model 包的类型；model 包不定义接口。
-- `auth.Principal`（`ID`、`Username`、`Role`）是认证身份，不属于持久化模型，保留在 `auth` 根包。Request Context 只保存 `Principal`，不保存完整 `User`；`Principal` 只包含认证授权所需的最小字段，不含密码哈希、Session Token 等内部状态，也不承担 API 响应职责。
-- JSON 标签只属于 Handler 中的 Request DTO 和 Logic 中定义的 `XxxResult`。Repository 返回的内部模型只能在 Logic 内部使用，Logic 必须转换成可直接交给 `httpx.Reply` 的 `XxxResult`；Handler 不直接响应内部模型或 `Principal`。
-- 正常认证调用链通过强类型 `UserResult` 等 Result 收紧，Handler 遵守架构约定，并通过精确响应契约测试（data 恰好是约定的字段集合）防止字段意外增加；最终仍需静态检查和 Code Review 把关。
-- Cookie 等 HTTP 副作用仍由 Handler 负责。
+- `app`：Router、Layout、全局初始化和应用级组件，负责组装业务模块。
+- `modules`：业务内聚代码；不得导入 `app`。
+- `shared`：不理解 Cairn 业务；不得导入 `app` 或 `modules`。
+- 业务模块之间可单向依赖，但不得形成循环依赖。
+- 模块外部代码（包括 `app` 和其他模块）只能从目标模块根 `index.ts` 导入。
+- 禁止外部直接依赖模块的 `api`、`views`、`components`、`composables`、`store.ts`、`types.ts` 或其他内部文件。
+- 模块内部直接导入自身文件，不得从自己的根 `index.ts` 导入。
+- `index.ts` 必须显式导出，禁止 `export *`。
+- `app/router` 直接动态导入模块 View 是唯一例外，用于保留路由懒加载。
+- Layout 由 `app/router` 通过嵌套路由装配，模块 View 不得包裹或导入 Layout。
+- 归属看语义，不看引用次数。业务代码优先留在模块；禁止用 `common/helpers/misc` 堆放杂项。
+- 除模块根 `index.ts` 外，不创建汇总式 barrel 文件。
 
-**已确定的技术栈**：Go 1.26、`chi`、`pgxpool`、PostgreSQL、`slog`、`viper`、Vue 3、TypeScript、Vue Router、Pinia、Vite、原生 `fetch`、Docker Compose、Caddy。
+页面数据流：
 
-**明确不用**：GORM、Gin/Beego/Echo、React/Next.js、Kubernetes、消息队列、Elasticsearch、Axios、Vuex。
+```text
+Router → View → Component
+           ├→ Module API
+           └→ Composable → Module API
 
-## 已做的关键决策
+Router / View → Store → Module API
+Module API → Shared HTTP → Go API
+```
 
-| 决策 | 结论 | 记录位置 |
-|---|---|---|
-| Redis | 延后，需要时再加 | diff-05-31 第三节 |
-| COS 对象存储 | 延后，先用本地目录存文件 | diff-05-31 第四节 |
-| 本地容器化 | 前端、后端、数据库和迁移均使用 Docker Compose | `docker-compose.yml` |
-| CI/CD（GitHub Actions + TCR）| 延后，目前直接 ssh → go build → 重启 | diff-05-31 第六节 |
-| 本地运行方式 | Docker Compose；Vue 使用 Vite 热更新，Go 使用 Air 热更新 | `docker-compose.yml` |
+- View：路由输入、页面装配、页面状态和导航。
+- 简单 View 可直接调用同模块 Module API；不为保持 View 空壳而机械创建 Page Composable。
+- Component：界面与局部交互；需要独立异步状态时使用同模块 Composable，不直接调用 Module API 或 Shared HTTP。
+- Composable：异步 `data/loading/error`、生命周期、请求竞态、共享响应式状态或复用逻辑。
+- Store：仅保存跨页面或跨生命周期共享状态，不作为默认页面缓存。
+- Utility：无 Vue 生命周期依赖的纯函数。
+- `types.ts`：类型契约，不含运行时逻辑。
+- Module API：路径、方法、参数、返回类型；不操作 Router、Store 或 UI。
+- Shared HTTP：通用传输和响应解析，不含业务行为。
 
-## 技术总结
-当我每学过一个新知识新技术，需要总结成博客文档，放到网站上
+View 可保留少量模板专用 `ref`、`computed`、导航和事件转发。API、类型、Store 和纯函数不得统一塞入 `composables`。
 
-## 技术实践
-写代码之前，要查最佳实践，确保拥抱新趋势新技术
+页面专用 `computed` 可以留在 View；不要为一行派生状态创建 Composable。SFC 建议顺序：imports → props/router/store → 源状态 → computed → composable → handlers → watch/lifecycle → template → style。
+
+## 组件与状态
+
+- 统一使用 Composition API 和 `<script setup lang="ts">`。
+- View 是路由页面；Layout 是应用骨架；`app/components` 可理解整个应用；业务组件属于所在模块。
+- Shared 组件不导入 Router、业务 Store 或业务类型，只通过 Props、Events、Slots 和 `v-model` 协作。
+- 状态必须只有一个可信来源；禁止修改普通 Prop。
+- `v-model` 子组件只因直接用户输入更新模型；预填、重置和外部状态切换由状态持有者负责。
+- 禁止用模板 Ref/`defineExpose` 操作普通表单或业务状态；仅命令式 UI 能力可例外。
+- `provide/inject` 仅用于深层组件树的稳定上下文，使用强类型 `InjectionKey`，不替代普通父子通信。
+- 提交成功、取消、切换目标时必须明确清空或保留输入。
+- 页面输入、按钮 submitting、局部错误不得放全局 Store。
+- 只按独立职责、稳定接口、递归、实际复用或测试边界拆组件；不按行数或假设的未来复用拆分。
+- Composable 使用 `useXxx` 命名，返回明确状态和操作，并在失效或卸载时清理副作用。
+- 不依赖 Vue 的逻辑保持为纯函数；只在复杂、需测试或真实复用时提取文件。
+
+## API 与类型
+
+- 以真实 Go Handler、Logic Result 和 `httpx.Reply` 为准，并同步核对 OpenAPI、Wiki、Module API、TypeScript 类型。
+- API Body 使用 `XxxRequest`，成功 `data` 使用 `XxxResult`；模块公共契约放 `types.ts`，Props 和内部辅助类型就近定义。
+- 禁止显式 `any`、`@ts-ignore`、双重断言和无检查的宽泛 `as`；外部值用 `unknown` 并收窄。
+- 优先类型守卫和 `satisfies`；断言只留在已检查边界、`as const` 或 Shared HTTP 单一传输边界。
+- `request<T>` 只有编译期约束，不代表运行时校验；Shared HTTP 必须先验证通用响应信封。
+- 区分 `T | null`、可选字段和未加载状态；空集合用 `[]`。
+- API 日期保持 ISO 8601 `string`，JSON ID 用 `number`，固定枚举值用字符串联合，不用 TypeScript `enum`。
+- 不建立内容相同的 DTO/Entity/Model/ViewModel；泛型只表达真实类型关系。
+- 纯类型导入必须使用 `import type`。
+- Path 使用 `encodeURIComponent`，Query 使用 `URLSearchParams`，JSON 由 Shared HTTP 序列化。
+- 本项目评论列表是顶层数组加可选嵌套 `replies`，禁止再次按扁平列表组树并覆盖回复。
+
+## 异步与错误
+
+- 每个资源独立维护 data、loading、error；文章、评论、列表和写操作不得共用模糊 loading。
+- loading 时不显示“暂无数据”；已有数据刷新或加载更多失败也必须显示错误。
+- 写操作成功但刷新失败属于部分成功，需明确提示。
+- Composable 若吞掉错误，必须返回调用方可判断的状态；不能让调用方误判成功。
+
+路由参数驱动的请求必须：
+
+1. 隔离或清理旧数据。
+2. 用 AbortController 取消同资源旧请求。
+3. controller 捕获为本次调用的局部变量。
+4. 写入 data/error/loading 前校验 controller 身份和当前参数。
+5. 卸载时取消请求。
+6. 写操作完成后仅在参数仍为当前值时刷新，禁止把旧页面数据写入新页面。
+
+核心模式：
+
+```ts
+const controller = new AbortController()
+currentController = controller
+const result = await fetchData(key, controller.signal)
+if (currentController !== controller || key !== currentKey()) return
+data.value = result
+// catch/finally 同样先校验 currentController === controller
+```
+
+## 认证与路由
+
+认证区分：未初始化、已认证、确认未登录、服务不可用。
+
+- 只有 `/auth/me` 返回 200 或 401 才标记初始化完成；网络/500 保持未初始化并可重试。
+- 并发初始化复用同一个 Promise。
+- 公开路由后台初始化，不得等待并阻塞导航。
+- `guestOnly/requiresAuth/requiresAdmin` 才等待身份；`requiresAdmin` 隐含 `requiresAuth`。
+- 确认未登录才跳登录页；非管理员拒绝管理员页面。
+- 服务不可用时 guest-only 可放行，受保护路由必须取消或展示无法验证身份，不能直接放行。
+- 前端守卫只改善体验，Go 后端始终最终鉴权。
+- 登录 redirect 只接受合法站内路径。
+
+## 样式
+
+- `shared/styles`：Reset、无障碍和通用工具。
+- `app/styles`：Cairn Token、全局排版、Layout。
+- `modules/*`：业务样式，优先组件 scoped style。
+
+## 验收
+
+完成前至少执行：
+
+```text
+npm run type-check
+npm run build
+git diff --check
+```
+
+有相关测试时必须运行。架构变更还要检查 `modules` 不导入 `app`，`shared` 不导入上层，并删除本次产生的孤儿代码。
+
+类型检查和构建不能证明运行时正确；按改动验证参数快速切换、请求取消/乱序、认证 200/401/网络/500、各类路由、空数据与刷新失败、表单完整周期、评论嵌套回复。

@@ -1,0 +1,24 @@
+/* Cairn — design tokens
+   Fonts, colours, spacing, and typographic scale.
+   These are the visual identity of the site. */
+
+@import url('https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Noto+Serif+SC:wght@500;600&family=Noto+Sans+SC:wght@400;500&family=JetBrains+Mono:wght@400;500&family=Caveat:wght@500;600&family=Ma+Shan+Zheng&display=swap');
+
+:root {
+  --paper:   #ECE6D6;
+  --paper-2: #E4DCC7;
+  --ink:     #2A2620;
+  --faded:   #857A66;
+  --rule:    #D8CFB8;
+  --binding: #C9BE9F;
+  --blaze:   #C15B34;
+  --pine:    #3B5A50;
+
+  --serif: "Spectral", "Noto Serif SC", Georgia, serif;
+  --sans:  "Noto Sans SC", -apple-system, "Segoe UI", system-ui, sans-serif;
+  --mono:  "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
+  --hand:  "Caveat", "Ma Shan Zheng", cursive;
+
+  --measure: 66ch;
+  --edge: clamp(1.1rem, 4vw, 4rem);
+}
