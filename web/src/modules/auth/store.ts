@@ -3,13 +3,16 @@ import { defineStore } from 'pinia'
 
 import { APIRequestError } from '../../shared/api/http'
 import { getCurrentUser, login as requestLogin, register as requestRegister, logout as requestLogout } from './api/auth'
-import type { Credentials, User } from './types'
+import type { LoginRequest, RegisterRequest, UserResult } from './types'
 
 export const useAuthStore = defineStore('auth', () => {
-  const user = ref<User | null>(null)
+  const user = ref<UserResult | null>(null)
   const loading = ref(false)
+  const initialized = ref(false)
 
-  async function login(credentials: Credentials) {
+  let initPromise: Promise<void> | null = null
+
+  async function login(credentials: LoginRequest) {
     loading.value = true
     try {
       user.value = await requestLogin(credentials)
@@ -18,7 +21,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function register(credentials: Credentials) {
+  async function register(credentials: RegisterRequest) {
     loading.value = true
     try {
       user.value = await requestRegister(credentials)
@@ -30,12 +33,26 @@ export const useAuthStore = defineStore('auth', () => {
   async function loadCurrentUser() {
     try {
       user.value = await getCurrentUser()
+      initialized.value = true
     } catch (error) {
-      if (!(error instanceof APIRequestError) || error.status !== 401) {
-        throw error
+      if (error instanceof APIRequestError && error.status === 401) {
+        user.value = null
+        initialized.value = true
+        return
       }
-      user.value = null
+      // Network error or 500: leave initialized false to allow retry
+      throw error
     }
+  }
+
+  /** Deduplicates in-flight requests. Throws on network/500 so callers can distinguish "unavailable" from "guest". */
+  async function ensureCurrentUser() {
+    if (initialized.value) return
+    if (initPromise) return initPromise
+    initPromise = loadCurrentUser().finally(() => {
+      initPromise = null
+    })
+    return initPromise
   }
 
   async function logout() {
@@ -43,5 +60,5 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
   }
 
-  return { user, loading, login, register, loadCurrentUser, logout }
+  return { user, loading, initialized, login, register, loadCurrentUser, ensureCurrentUser, logout }
 })

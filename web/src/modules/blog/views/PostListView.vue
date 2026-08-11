@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
-import { useBlogStore } from '../store'
-import SiteHeader from '../../../shared/components/SiteHeader.vue'
-import SiteFooter from '../../../shared/components/SiteFooter.vue'
-import { markers } from '../../../shared/markers'
+import { markers } from '../markers'
+import { usePostList } from '../composables/usePostList'
 
-const blog = useBlogStore()
+const { posts, page, hasMore, loading, error, loadPosts } = usePostList()
 
-onMounted(() => blog.loadPosts(1))
+onMounted(() => { loadPosts(1) })
 
 function formatDate(d: string | null) {
   if (!d) return ''
@@ -34,9 +32,7 @@ function coord(index: number) {
 </script>
 
 <template>
-  <div class="site">
-    <SiteHeader />
-    <div class="page">
+  <div class="page">
       <section class="intro">
         <span class="eyebrow">field notebook · 卷一</span>
         <h1>盖一座博客的<br>登山手账</h1>
@@ -44,13 +40,18 @@ function coord(index: number) {
       </section>
 
       <main class="log">
-        <div v-if="blog.loading && blog.posts.length === 0" class="empty" style="padding-left: clamp(4.4rem, 13vw, 10.5rem)">
+        <div v-if="loading && posts.length === 0" class="empty" style="padding-left: clamp(4.4rem, 13vw, 10.5rem)">
           <span class="spinner"></span> 翻页中…
         </div>
 
+        <div v-else-if="error && posts.length === 0" class="empty" style="padding-left: clamp(4.4rem, 13vw, 10.5rem); color: var(--blaze)">
+          {{ error }}
+        </div>
+
         <template v-else>
+          <p v-if="error" style="padding-left: clamp(4.4rem, 13vw, 10.5rem); color: var(--blaze); font-size: .85rem;">{{ error }}</p>
           <RouterLink
-            v-for="(post, i) in blog.posts"
+            v-for="(post, i) in posts"
             :key="post.id"
             :to="`/posts/${post.slug}`"
             class="entry"
@@ -71,18 +72,16 @@ function coord(index: number) {
           </RouterLink>
         </template>
 
-        <div v-if="blog.hasMore" style="padding: 2rem 0; padding-left: clamp(4.4rem, 13vw, 10.5rem)">
+        <div v-if="hasMore" style="padding: 2rem 0; padding-left: clamp(4.4rem, 13vw, 10.5rem)">
           <button
             class="load-more"
             style="border: 0; background: none; color: var(--pine); font-family: var(--mono); font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; cursor: pointer;"
-            :disabled="blog.loading"
-            @click="blog.loadPosts(blog.page + 1)"
+            :disabled="loading"
+            @click="loadPosts(page + 1)"
           >
-            {{ blog.loading ? '加载中…' : '+ 加载更多' }}
+            {{ loading ? '加载中…' : '+ 加载更多' }}
           </button>
         </div>
       </main>
     </div>
-    <SiteFooter />
-  </div>
 </template>

@@ -1,12 +1,8 @@
 <script setup lang="ts">
-import SiteHeader from '../../../shared/components/SiteHeader.vue'
-import SiteFooter from '../../../shared/components/SiteFooter.vue'
 </script>
 
 <template>
-  <div class="site">
-    <SiteHeader />
-    <div class="page">
+  <div class="page">
       <section class="tools-intro">
         <span class="eyebrow">工具站</span>
         <h1>在线小工具</h1>
@@ -24,6 +20,4 @@ import SiteFooter from '../../../shared/components/SiteFooter.vue'
         </div>
       </div>
     </div>
-    <SiteFooter />
-  </div>
 </template>

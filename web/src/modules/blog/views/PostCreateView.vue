@@ -1,14 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '../../auth/store'
-import { useBlogStore } from '../store'
-import SiteHeader from '../../../shared/components/SiteHeader.vue'
-import SiteFooter from '../../../shared/components/SiteFooter.vue'
+import { createPost } from '../api/posts'
 
 const router = useRouter()
-const auth = useAuthStore()
-const blog = useBlogStore()
 
 const slug = ref('')
 const title = ref('')
@@ -16,22 +11,18 @@ const contentMD = ref('')
 const errorMessage = ref('')
 const submitting = ref(false)
 
-if (auth.user?.role !== 'admin') {
-  router.replace('/login')
-}
-
 async function submit() {
   errorMessage.value = ''
   submitting.value = true
   try {
-    const post = await blog.addPost({
+    const post = await createPost({
       slug: slug.value,
       title: title.value,
       content_md: contentMD.value,
     })
     await router.replace(`/posts/${post.slug}`)
-  } catch (e: any) {
-    errorMessage.value = e?.message ?? '发布失败，请稍后重试。'
+  } catch (e: unknown) {
+    errorMessage.value = e instanceof Error ? e.message : '发布失败，请稍后重试。'
   } finally {
     submitting.value = false
   }
@@ -39,9 +30,7 @@ async function submit() {
 </script>
 
 <template>
-  <div class="site">
-    <SiteHeader />
-    <div class="page">
+  <div class="page">
       <div class="tool-page">
         <RouterLink class="back" to="/">← 返回手账</RouterLink>
         <h1>写文章</h1>
@@ -90,6 +79,4 @@ async function submit() {
         </form>
       </div>
     </div>
-    <SiteFooter />
-  </div>
 </template>

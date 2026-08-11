@@ -1,12 +1,9 @@
 import { request } from '../../../shared/api/http'
+import type { FormatJSONRequest, FormatJSONResult } from '../types'
 
-export type FormatJSONResult = {
-  formatted: string
-}
-
-export function formatJSON(input: string) {
+export function formatJSON(input: FormatJSONRequest) {
   return request<FormatJSONResult>('/api/v1/tools/json/format', {
     method: 'POST',
-    body: JSON.stringify({ input }),
+    json: input,
   })
 }

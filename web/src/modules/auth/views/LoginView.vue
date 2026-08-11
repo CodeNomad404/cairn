@@ -26,13 +26,20 @@ async function submit() {
     } else {
       await auth.login(credentials)
     }
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
+    const redirect = getSafeRedirect(route.query.redirect)
     await router.replace(redirect)
   } catch (error) {
     errorMessage.value = error instanceof APIRequestError
       ? error.message
       : '网络异常，请稍后重试。'
   }
+}
+
+function getSafeRedirect(raw: unknown): string {
+  if (typeof raw === 'string' && raw.startsWith('/') && !raw.startsWith('//') && !raw.startsWith('\\')) {
+    return raw
+  }
+  return '/'
 }
 </script>
 
