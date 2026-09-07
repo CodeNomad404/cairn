@@ -29,6 +29,7 @@ body {
   color: var(--ink); text-decoration: none;
   display: inline-flex; align-items: center; gap: .5rem;
 }
+.mark-logo { height: 1.4rem; width: auto; }
 .nav {
   display: flex; gap: 1.4rem; align-items: baseline;
   font-family: var(--mono); font-size: .72rem; letter-spacing: .12em; text-transform: uppercase;

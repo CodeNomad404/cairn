@@ -46,6 +46,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('../../modules/tool/views/JsonToolView.vue'),
       },
       {
+        path: 'tools/diff',
+        name: 'diff-tool',
+        component: () => import('../../modules/tool/views/DiffToolView.vue'),
+      },
+      {
         path: ':pathMatch(.*)*',
         name: 'not-found',
         component: () => import('../../modules/blog/views/NotFoundView.vue'),
