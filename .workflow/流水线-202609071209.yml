@@ -58,43 +58,48 @@ stages:
       artifactName: output
       artifactVersion: latest
     script: |-
-      set -Eeuo pipefail
+  bash <<'BASH'
+  set -Eeuo pipefail
 
-      readonly DEPLOY_DIR="${HOME}/gitee_go/deploy"
-      readonly EXTRACT_DIR="$(mktemp -d /tmp/cairn-gitee-go.XXXXXX)"
-      trap 'rm -rf "${EXTRACT_DIR}"' EXIT
+  readonly DEPLOY_ROOT="${HOME}/gitee_go/deploy"
+  readonly ARCHIVE="${DEPLOY_ROOT}/output.tar.gz"
+  readonly BUNDLE_DIR="$(mktemp -d /tmp/cairn-gitee-go.XXXXXX)"
+  trap 'rm -rf "${BUNDLE_DIR}"' EXIT
 
-      remote_script="$(find "${DEPLOY_DIR}" -maxdepth 4 -type f -name remote-deploy.sh -print -quit)"
-      commit_file="$(find "${DEPLOY_DIR}" -maxdepth 4 -type f -name commit.sha -print -quit)"
+  if [[ ! -f "${ARCHIVE}" ]]; then
+    printf 'deployment artifact was not found: %s\n' "${ARCHIVE}" >&2
+    exit 1
+  fi
 
-      if [[ -z "${remote_script}" || -z "${commit_file}" ]]; then
-        archive="$(find "${DEPLOY_DIR}" -maxdepth 2 -type f -name '*.tar.gz' -print -quit)"
-        if [[ -z "${archive}" ]]; then
-          echo "找不到部署制品" >&2
-          exit 1
-        fi
+  tar -xzf "${ARCHIVE}" -C "${BUNDLE_DIR}"
 
-        tar -xzf "${archive}" -C "${EXTRACT_DIR}"
-        remote_script="$(find "${EXTRACT_DIR}" -type f -name remote-deploy.sh -print -quit)"
-        commit_file="$(find "${EXTRACT_DIR}" -type f -name commit.sha -print -quit)"
-      fi
+  remote_script="$(find "${BUNDLE_DIR}" -type f \
+    -name remote-deploy.sh -print -quit)"
+  commit_file="$(find "${BUNDLE_DIR}" -type f \
+    -name commit.sha -print -quit)"
 
-      if [[ -z "${remote_script}" || -z "${commit_file}" ]]; then
-        echo "部署制品中缺少 remote-deploy.sh 或 commit.sha" >&2
-        exit 1
-      fi
+  if [[ -z "${remote_script}" || ! -f "${remote_script}" ]]; then
+    printf 'remote-deploy.sh was not found in the artifact\n' >&2
+    exit 1
+  fi
 
-      deploy_commit="$(tr -d '\r\n' < "${commit_file}")"
-      release_id="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+  if [[ -z "${commit_file}" || ! -f "${commit_file}" ]]; then
+    printf 'commit.sha was not found in the artifact\n' >&2
+    exit 1
+  fi
 
-      bash "${remote_script}" \
-        /opt/cairn \
-        /opt/cairn-repo \
-        /home/ubuntu/.ssh/id_ed25519_gitee \
-        git@gitee.com:ccairn/cairn.git \
-        https://goproxy.cn,direct \
-        "${deploy_commit}" \
-        "${release_id}"
+  readonly DEPLOY_COMMIT="$(tr -d '\r\n' < "${commit_file}")"
+  readonly RELEASE_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+
+  bash "${remote_script}" \
+    /opt/cairn \
+    /opt/cairn-repo \
+    /home/ubuntu/.ssh/id_ed25519_gitee \
+    git@gitee.com:ccairn/cairn.git \
+    https://goproxy.cn,direct \
+    "${DEPLOY_COMMIT}" \
+    "${RELEASE_ID}"
+  BASH
     hostGroupID:
       ID: cairn-production
       hostID:
