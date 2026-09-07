@@ -47,7 +47,7 @@ stages:
 - name: production
   displayName: 生产部署
   strategy: naturally
-  trigger: manual
+  trigger: auto
   steps:
   - step: deploy@agent
     name: production_deploy
