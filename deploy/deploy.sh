@@ -114,7 +114,7 @@ rollback() {
 }
 trap rollback ERR
 
-for command_name in git go node npm migrate rsync curl python3; do
+for command_name in git go node pnpm migrate rsync curl python3; do
   command -v "${command_name}" >/dev/null 2>&1 || {
     printf 'missing required server command: %s\n' "${command_name}" >&2
     exit 1
@@ -150,8 +150,8 @@ cd "${REMOTE_REPO_DIR}"
 go mod download
 go test ./...
 go build -trimpath -ldflags='-s -w' -o "${new_binary}" ./cmd/server
-npm --prefix web ci --no-audit --no-fund
-npm --prefix web run build
+pnpm --dir web install --frozen-lockfile
+pnpm --dir web run build
 
 sudo systemctl start cairn-backup.service
 

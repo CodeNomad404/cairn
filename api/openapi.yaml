@@ -101,6 +101,19 @@ paths:
             schema: { type: object, required: [input], properties: { input: { type: string } } }
       responses:
         '200': { description: Formatted JSON }
+  /tools/course-registration/login:
+    post:
+      summary: Login to the BJTU course registration system
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CourseRegistrationLoginRequest' }
+      responses:
+        '200': { description: Logged in to BJTU MIS }
+        '401': { description: Cairn login required or BJTU credentials rejected }
+        '404': { description: No saved course registration credentials }
+        '422': { description: Captcha recognition failed }
 components:
   schemas:
     Credentials:
@@ -109,6 +122,18 @@ components:
       properties:
         username: { type: string }
         password: { type: string, format: password }
+    CourseRegistrationCredentials:
+      type: object
+      required: [student_id, password, tujian_username, tujian_password]
+      properties:
+        student_id: { type: string }
+        password: { type: string, format: password }
+        tujian_username: { type: string }
+        tujian_password: { type: string, format: password }
+    CourseRegistrationLoginRequest:
+      oneOf:
+        - { $ref: '#/components/schemas/CourseRegistrationCredentials' }
+        - { type: object, maxProperties: 0 }
     User:
       type: object
       properties:

@@ -10,7 +10,7 @@ Production layout:
 
 ## First deployment
 
-The server needs Git, Go 1.26.3, Node.js 24 LTS with npm, golang-migrate,
+The server needs Git, Go 1.26.3, Node.js 24 LTS with pnpm 11.15.0, golang-migrate,
 rsync, Caddy, Docker, PostgreSQL client tools, curl, and Python 3. Use an LTS
 Node.js release in production; Vite's preview server is not a production server.
 
@@ -23,7 +23,7 @@ sudo cp deploy/cairn.env.example /etc/cairn/cairn.env
 sudo chmod 600 /etc/cairn/cairn.env
 # Edit the production password before continuing.
 
-docker compose --env-file /etc/cairn/cairn.env up -d
+docker compose --env-file /etc/cairn/cairn.env up -d db
 set -a
 source /etc/cairn/cairn.env
 set +a
