@@ -1,0 +1,115 @@
+version: "1.0"
+name: cairn-master-cicd
+displayName: Cairn Master CI/CD
+stages:
+- name: CI 检查
+  displayName: CI 检查
+  strategy: naturally
+  trigger: auto
+  steps:
+  - step: build@golang
+    name: backend_ci
+    displayName: 后端 CI
+    golangVersion: 1.26.3
+    commands:
+    - "export GOPROXY=https://goproxy.cn,direct"
+    - chmod +x deploy/ci.sh deploy/remote-deploy.sh
+    - ./deploy/ci.sh backend
+    - rm -rf ./output
+    - mkdir -p ./output
+    - cp deploy/remote-deploy.sh ./output/
+    - git rev-parse HEAD > ./output/commit.sha
+    artifacts:
+    - name: BUILD_ARTIFACT
+      path:
+      - ./output
+      type: .tar.gz
+    caches:
+    - /go/pkg/mod
+    notify: []
+    strategy:
+      retry: "0"
+  - step: build@nodejs
+    name: frontend_ci
+    displayName: 前端 CI
+    nodeVersion: 24.0.0
+    commands:
+    - chmod +x deploy/ci.sh
+    - ./deploy/ci.sh frontend
+    caches:
+    - "~/.npm"
+    notify: []
+    strategy:
+      retry: "0"
+- name: 生产部署
+  displayName: 生产部署
+  strategy: naturally
+  trigger: manual
+  steps:
+  - step: deploy@agent
+    name: production_deploy
+    displayName: 部署到 Cairn 服务器
+    deployArtifact:
+    - name: output
+      target: "~/gitee_go/deploy"
+      source: build
+      dependArtifact: BUILD_ARTIFACT
+      artifactRepository: default
+      artifactName: output
+      artifactVersion: latest
+    script: |-
+      set -Eeuo pipefail
+
+      readonly DEPLOY_DIR="${HOME}/gitee_go/deploy"
+      readonly EXTRACT_DIR="$(mktemp -d /tmp/cairn-gitee-go.XXXXXX)"
+      trap 'rm -rf "${EXTRACT_DIR}"' EXIT
+
+      remote_script="$(find "${DEPLOY_DIR}" -maxdepth 4 -type f -name remote-deploy.sh -print -quit)"
+      commit_file="$(find "${DEPLOY_DIR}" -maxdepth 4 -type f -name commit.sha -print -quit)"
+
+      if [[ -z "${remote_script}" || -z "${commit_file}" ]]; then
+        archive="$(find "${DEPLOY_DIR}" -maxdepth 2 -type f -name '*.tar.gz' -print -quit)"
+        if [[ -z "${archive}" ]]; then
+          echo "找不到部署制品" >&2
+          exit 1
+        fi
+
+        tar -xzf "${archive}" -C "${EXTRACT_DIR}"
+        remote_script="$(find "${EXTRACT_DIR}" -type f -name remote-deploy.sh -print -quit)"
+        commit_file="$(find "${EXTRACT_DIR}" -type f -name commit.sha -print -quit)"
+      fi
+
+      if [[ -z "${remote_script}" || -z "${commit_file}" ]]; then
+        echo "部署制品中缺少 remote-deploy.sh 或 commit.sha" >&2
+        exit 1
+      fi
+
+      deploy_commit="$(tr -d '\r\n' < "${commit_file}")"
+      release_id="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+
+      bash "${remote_script}" \
+        /opt/cairn \
+        /opt/cairn-repo \
+        /home/ubuntu/.ssh/id_ed25519_gitee \
+        git@gitee.com:ccairn/cairn.git \
+        https://goproxy.cn,direct \
+        "${deploy_commit}" \
+        "${release_id}"
+    hostGroupID:
+      ID: cairn-production
+      hostID:
+      - 33018f3f-d424-4ac2-bbb1-9543a82b90c4
+    notify: []
+    strategy:
+      retry: "0"
+triggers:
+  trigger: auto
+  push:
+    branches:
+      prefix: []
+      precise:
+      - master
+      include: []
+notify: []
+strategy:
+  blocking: true
