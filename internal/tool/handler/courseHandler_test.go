@@ -15,9 +15,8 @@ import (
 
 func TestCourseRegistrationLoginRoute_RequiresCairnUser(t *testing.T) {
 	router := chi.NewRouter()
-	handler := New(
-		logic.NewJSONLogic(),
-		logic.NewCourseRegistrationLogic(nil, slog.New(slog.NewTextHandler(io.Discard, nil))),
+	handler := NewCourseHandler(
+		logic.NewCourseRegistrationLogic(nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil))),
 	)
 	handler.RegisterRoutes(router)
 
@@ -65,5 +64,24 @@ func TestCourseRegistrationLoginRequestValidate(t *testing.T) {
 				t.Fatal("Validate error = nil")
 			}
 		})
+	}
+}
+
+func TestCourseGrabRequestValidate(t *testing.T) {
+	valid := CourseGrabRequest{
+		Courses: []string{"M302006B:计算机体系结构 01 计算机学院"},
+	}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid request rejected: %v", err)
+	}
+
+	invalid := []CourseGrabRequest{
+		{},
+		{Courses: []string{" "}},
+	}
+	for _, request := range invalid {
+		if err := request.Validate(); err == nil {
+			t.Fatalf("invalid request accepted: %#v", request)
+		}
 	}
 }
