@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { formatJSON } from '../api/tools'
-import JsonTree from '../../../shared/components/JsonTree.vue'
-import SiteHeader from '../../../shared/components/SiteHeader.vue'
-import SiteFooter from '../../../shared/components/SiteFooter.vue'
+import JsonTree from '../components/JsonTree.vue'
 
 const input = ref('')
 const output = ref('')
@@ -11,10 +9,10 @@ const error = ref('')
 const loading = ref(false)
 const maxDepth = ref(99)
 
-const parsedOutput = computed(() => {
+const parsedOutput = computed<unknown | null>(() => {
   if (!output.value) return null
   try {
-    return JSON.parse(output.value)
+    return JSON.parse(output.value) as unknown
   } catch {
     return null
   }
@@ -26,10 +24,10 @@ async function handleFormat() {
   error.value = ''
   output.value = ''
   try {
-    const result = await formatJSON(input.value)
+    const result = await formatJSON({ input: input.value })
     output.value = result.formatted
-  } catch (e: any) {
-    error.value = e?.message ?? '格式化失败'
+  } catch (e: unknown) {
+    error.value = e instanceof Error ? e.message : '格式化失败'
   } finally {
     loading.value = false
   }
@@ -37,9 +35,7 @@ async function handleFormat() {
 </script>
 
 <template>
-  <div class="site">
-    <SiteHeader />
-    <div class="page">
+  <div class="page">
       <div class="tool-page">
         <RouterLink class="back" to="/tools">← 返回工具</RouterLink>
         <h1>JSON 格式化</h1>
@@ -73,8 +69,6 @@ async function handleFormat() {
         </div>
       </div>
     </div>
-    <SiteFooter />
-  </div>
 </template>
 
 <style scoped>

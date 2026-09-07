@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import cairnLogoUrl from '../../../assets/cairn-logo.png'
 import { APIRequestError } from '../../../shared/api/http'
 import { useAuthStore } from '../store'
 
@@ -26,7 +27,7 @@ async function submit() {
     } else {
       await auth.login(credentials)
     }
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
+    const redirect = getSafeRedirect(route.query.redirect)
     await router.replace(redirect)
   } catch (error) {
     errorMessage.value = error instanceof APIRequestError
@@ -34,15 +35,20 @@ async function submit() {
       : '网络异常，请稍后重试。'
   }
 }
+
+function getSafeRedirect(raw: unknown): string {
+  if (typeof raw === 'string' && raw.startsWith('/') && !raw.startsWith('//') && !raw.startsWith('\\')) {
+    return raw
+  }
+  return '/'
+}
 </script>
 
 <template>
   <div class="site">
     <header class="mast">
       <RouterLink class="mark" to="/">
-        <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="#2A2620" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round">
-          <path d="M10 3 L13 8 H7 Z"/><path d="M6.5 9.5 h7 v2.4 h-7 z"/><path d="M8 12.5 h4 v2.2 h-4 z"/><ellipse cx="10" cy="16.4" rx="5.2" ry="1.3" stroke-width="1.1"/>
-        </svg>
+        <img class="mark-logo" :src="cairnLogoUrl" alt="" aria-hidden="true" />
         Cairn
       </RouterLink>
     </header>

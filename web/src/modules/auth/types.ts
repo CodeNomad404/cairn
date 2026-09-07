@@ -1,9 +1,14 @@
-export type Credentials = {
+export type LoginRequest = {
   username: string
   password: string
 }
 
-export type User = {
+export type RegisterRequest = {
+  username: string
+  password: string
+}
+
+export type UserResult = {
   id: number
   username: string
   role: 'admin' | 'user'

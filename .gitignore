@@ -10,9 +10,15 @@ deploy/deploy.env
 .idea/
 .vscode/
 
+# Agent instructions
+AGENTS.md
+
 # OS
 .DS_Store
 *.log
+
+# Personal scripts (may contain credentials)
+claude-deepseek.ps1
 
 # Node
 node_modules/
@@ -27,3 +33,5 @@ docs/*
 !docs/Windows本地开发环境.md
 !docs/前端架构设计.md
 !docs/后端架构整改清单.md
+
+AGENTS.md

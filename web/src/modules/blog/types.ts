@@ -1,28 +1,28 @@
-export type PostSummary = {
+export type PostSummaryResult = {
   id: number
   slug: string
   title: string
   published_at: string | null
 }
 
-export type PostDetail = PostSummary & {
+export type PostDetailResult = PostSummaryResult & {
   content_html: string
 }
 
-export type PostList = {
-  items: PostSummary[]
+export type PostListResult = {
+  items: PostSummaryResult[]
   page: number
   page_size: number
   has_more: boolean
 }
 
-export type CreatePostInput = {
+export type CreatePostRequest = {
   slug: string
   title: string
   content_md: string
 }
 
-export type Comment = {
+export type CommentResult = {
   id: number
   post_id: number
   parent_id: number | null
@@ -31,18 +31,14 @@ export type Comment = {
   status: string
   created_at: string
   username: string
+  replies?: CommentResult[]
 }
 
-/** 前端自行组装树后的评论节点（API 返回的是扁平列表） */
-export type CommentWithReplies = Comment & {
-  replies: CommentWithReplies[]
+export type CommentListResult = {
+  items: CommentResult[]
 }
 
-export type CommentList = {
-  items: Comment[]
-}
-
-export type CreateCommentInput = {
+export type CreateCommentRequest = {
   content: string
   parent_id: number | null
 }

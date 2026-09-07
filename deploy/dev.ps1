@@ -1,5 +1,6 @@
 $ErrorActionPreference = "Stop"
-$projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$projectRoot = Split-Path -Parent $scriptDir
 Set-Location $projectRoot
 
 Write-Host "Starting Cairn local development environment..." -ForegroundColor Cyan
