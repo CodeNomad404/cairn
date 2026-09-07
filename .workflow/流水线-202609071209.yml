@@ -1,8 +1,9 @@
 version: "1.0"
 name: cairn-master-cicd
 displayName: Cairn Master CI/CD
+
 stages:
-- name: CI 检查
+- name: ci
   displayName: CI 检查
   strategy: naturally
   trigger: auto
@@ -10,9 +11,9 @@ stages:
   - step: build@golang
     name: backend_ci
     displayName: 后端 CI
-    golangVersion: 1.26.3
+    golangVersion: "1.26.3"
     commands:
-    - "export GOPROXY=https://goproxy.cn,direct"
+    - export GOPROXY=https://goproxy.cn,direct
     - chmod +x deploy/ci.sh deploy/remote-deploy.sh
     - ./deploy/ci.sh backend
     - rm -rf ./output
@@ -29,19 +30,21 @@ stages:
     notify: []
     strategy:
       retry: "0"
+
   - step: build@nodejs
     name: frontend_ci
     displayName: 前端 CI
-    nodeVersion: 22.22.0
+    nodeVersion: "22.22.0"
     commands:
     - chmod +x deploy/ci.sh
     - ./deploy/ci.sh frontend
     caches:
-    - "~/.npm"
+    - ~/.npm
     notify: []
     strategy:
       retry: "0"
-- name: 生产部署
+
+- name: production
   displayName: 生产部署
   strategy: naturally
   trigger: manual
@@ -58,48 +61,48 @@ stages:
       artifactName: output
       artifactVersion: latest
     script: |-
-  bash <<'BASH'
-  set -Eeuo pipefail
+      bash <<'BASH'
+      set -Eeuo pipefail
 
-  readonly DEPLOY_ROOT="${HOME}/gitee_go/deploy"
-  readonly ARCHIVE="${DEPLOY_ROOT}/output.tar.gz"
-  readonly BUNDLE_DIR="$(mktemp -d /tmp/cairn-gitee-go.XXXXXX)"
-  trap 'rm -rf "${BUNDLE_DIR}"' EXIT
+      readonly DEPLOY_ROOT="${HOME}/gitee_go/deploy"
+      readonly ARCHIVE="${DEPLOY_ROOT}/output.tar.gz"
+      readonly BUNDLE_DIR="$(mktemp -d /tmp/cairn-gitee-go.XXXXXX)"
+      trap 'rm -rf "${BUNDLE_DIR}"' EXIT
 
-  if [[ ! -f "${ARCHIVE}" ]]; then
-    printf 'deployment artifact was not found: %s\n' "${ARCHIVE}" >&2
-    exit 1
-  fi
+      if [[ ! -f "${ARCHIVE}" ]]; then
+        printf 'deployment artifact was not found: %s\n' "${ARCHIVE}" >&2
+        exit 1
+      fi
 
-  tar -xzf "${ARCHIVE}" -C "${BUNDLE_DIR}"
+      tar -xzf "${ARCHIVE}" -C "${BUNDLE_DIR}"
 
-  remote_script="$(find "${BUNDLE_DIR}" -type f \
-    -name remote-deploy.sh -print -quit)"
-  commit_file="$(find "${BUNDLE_DIR}" -type f \
-    -name commit.sha -print -quit)"
+      remote_script="$(find "${BUNDLE_DIR}" -type f \
+        -name remote-deploy.sh -print -quit)"
+      commit_file="$(find "${BUNDLE_DIR}" -type f \
+        -name commit.sha -print -quit)"
 
-  if [[ -z "${remote_script}" || ! -f "${remote_script}" ]]; then
-    printf 'remote-deploy.sh was not found in the artifact\n' >&2
-    exit 1
-  fi
+      if [[ -z "${remote_script}" || ! -f "${remote_script}" ]]; then
+        printf 'remote-deploy.sh was not found in the artifact\n' >&2
+        exit 1
+      fi
 
-  if [[ -z "${commit_file}" || ! -f "${commit_file}" ]]; then
-    printf 'commit.sha was not found in the artifact\n' >&2
-    exit 1
-  fi
+      if [[ -z "${commit_file}" || ! -f "${commit_file}" ]]; then
+        printf 'commit.sha was not found in the artifact\n' >&2
+        exit 1
+      fi
 
-  readonly DEPLOY_COMMIT="$(tr -d '\r\n' < "${commit_file}")"
-  readonly RELEASE_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+      readonly DEPLOY_COMMIT="$(tr -d '\r\n' < "${commit_file}")"
+      readonly RELEASE_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 
-  bash "${remote_script}" \
-    /opt/cairn \
-    /opt/cairn-repo \
-    /home/ubuntu/.ssh/id_ed25519_gitee \
-    git@gitee.com:ccairn/cairn.git \
-    https://goproxy.cn,direct \
-    "${DEPLOY_COMMIT}" \
-    "${RELEASE_ID}"
-  BASH
+      bash "${remote_script}" \
+        /opt/cairn \
+        /opt/cairn-repo \
+        /home/ubuntu/.ssh/id_ed25519_gitee \
+        git@gitee.com:ccairn/cairn.git \
+        https://goproxy.cn,direct \
+        "${DEPLOY_COMMIT}" \
+        "${RELEASE_ID}"
+      BASH
     hostGroupID:
       ID: cairn-production
       hostID:
@@ -107,6 +110,7 @@ stages:
     notify: []
     strategy:
       retry: "0"
+
 triggers:
   trigger: auto
   push:
@@ -115,6 +119,8 @@ triggers:
       precise:
       - master
       include: []
+
 notify: []
+
 strategy:
   blocking: true
