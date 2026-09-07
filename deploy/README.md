@@ -1,9 +1,11 @@
 # Cairn Deployment
 
-Production layout:
+Production layout (the full source checkout used for builds lives separately at
+`/opt/cairn-repo`):
 
 ```text
-/opt/cairn                 application source and binary
+/opt/cairn                 runtime files and operational database files
+/opt/cairn-repo            server-side Git checkout used for builds
 /etc/cairn/cairn.env       production secrets
 /var/backups/cairn         database backups
 ```
@@ -107,14 +109,52 @@ Then run it from the repository root:
 # or: task deploy
 ```
 
-The script does not inspect, commit, or push the local Git repository. It only
-connects to the server. The server clones or updates `master` in its source cache
-at `/opt/cairn-repo`, downloads dependencies, runs Go tests, builds the Go binary
+The script also accepts deployment settings directly from environment variables,
+which allows a CI/CD runner to use protected variables instead of creating
+`deploy/deploy.env`. Set `DEPLOY_COMMIT` to the runner's full 40-character commit
+SHA so the server deploys exactly the revision that passed CI:
+
+```bash
+DEPLOY_HOST=YOUR_SERVER_IP \
+GITEE_REPO_URL=git@gitee.com:YOUR_ACCOUNT/cairn.git \
+DEPLOY_COMMIT="$(git rev-parse HEAD)" \
+./deploy/deploy.sh
+```
+
+Only one remote deployment may run at a time. A second deployment exits without
+making changes while the first one holds the deployment lock.
+
+## Continuous integration
+
+Run all CI checks locally with:
+
+```bash
+./deploy/ci.sh
+# or: task ci
+```
+
+CI systems with separate Go and Node.js build environments can run the two
+halves independently:
+
+```bash
+./deploy/ci.sh backend
+./deploy/ci.sh frontend
+```
+
+The backend job downloads modules, runs `go vet`, runs all Go tests, and builds
+the server. The frontend job installs the exact locked dependencies, performs
+Vue/TypeScript checks, and creates the production frontend build.
+
+The local `deploy.sh` only loads configuration and sends `remote-deploy.sh` over
+one SSH connection. The server clones or updates `master` in its source cache at
+`/opt/cairn-repo`, downloads dependencies, runs Go tests, builds the Go binary
 and Vue production assets, backs up PostgreSQL, runs forward migrations,
-atomically installs the new backend and frontend, restarts the service, and
-checks `/healthz`. No source files are uploaded from the local machine. If the
-health check fails, it restores the previous binary and frontend assets. Applied
-database migrations are deliberately not rolled back.
+installs the new backend and frontend, restarts the service, and checks
+`/healthz`. No source files or `node_modules` are copied into the runtime
+directory. If the health check fails, it restores the previous binary, frontend,
+and configuration. Applied database migrations are deliberately not rolled back.
+After a successful deployment, only the immediately previous application release
+is retained for rollback.
 
 Use another configuration file when needed:
 

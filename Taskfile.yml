@@ -11,6 +11,11 @@ tasks:
     cmds:
       - docker compose build
 
+  ci:
+    desc: Run the same backend and frontend checks used by CI
+    cmds:
+      - ./deploy/ci.sh
+
   deploy:
     desc: Pull and deploy the latest master branch to production
     cmds:
