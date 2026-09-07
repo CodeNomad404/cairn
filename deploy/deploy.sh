@@ -114,7 +114,7 @@ rollback() {
 }
 trap rollback ERR
 
-for command_name in git go node pnpm migrate rsync curl python3; do
+for command_name in git go node npm migrate rsync curl python3; do
   command -v "${command_name}" >/dev/null 2>&1 || {
     printf 'missing required server command: %s\n' "${command_name}" >&2
     exit 1
@@ -150,8 +150,24 @@ cd "${REMOTE_REPO_DIR}"
 go mod download
 go test ./...
 go build -trimpath -ldflags='-s -w' -o "${new_binary}" ./cmd/server
-pnpm --dir web install --frozen-lockfile
-pnpm --dir web run build
+
+if command -v pnpm >/dev/null 2>&1; then
+  pnpm_command=(pnpm)
+else
+  readonly package_manager="$(node -p "require('./web/package.json').packageManager")"
+  case "${package_manager}" in
+    pnpm@*) ;;
+    *)
+      printf 'web/package.json must declare packageManager as pnpm@<version>\n' >&2
+      exit 1
+      ;;
+  esac
+  printf 'pnpm is not installed; using npm exec with %s\n' "${package_manager}"
+  pnpm_command=(npm exec --yes --package="${package_manager}" -- pnpm)
+fi
+
+"${pnpm_command[@]}" --dir web install --frozen-lockfile
+"${pnpm_command[@]}" --dir web run build
 
 sudo systemctl start cairn-backup.service
 

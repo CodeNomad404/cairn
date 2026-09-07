@@ -10,9 +10,11 @@ Production layout:
 
 ## First deployment
 
-The server needs Git, Go 1.26.3, Node.js 24 LTS with pnpm 11.15.0, golang-migrate,
+The server needs Git, Go 1.26.3, Node.js 24 LTS with npm, golang-migrate,
 rsync, Caddy, Docker, PostgreSQL client tools, curl, and Python 3. Use an LTS
 Node.js release in production; Vite's preview server is not a production server.
+The deployment script uses an installed pnpm when available, otherwise npm runs
+the exact pnpm version declared in `web/package.json`.
 
 ```bash
 sudo useradd --system --home /opt/cairn --shell /usr/sbin/nologin cairn
