@@ -32,7 +32,7 @@ stages:
   - step: build@nodejs
     name: frontend_ci
     displayName: 前端 CI
-    nodeVersion: 24.0.0
+    nodeVersion: 22.22.0
     commands:
     - chmod +x deploy/ci.sh
     - ./deploy/ci.sh frontend
