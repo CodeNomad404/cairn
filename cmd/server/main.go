@@ -30,7 +30,7 @@ func main() {
 		Addr:         addr,
 		Handler:      application.Router,
 		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
+		WriteTimeout: 40 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
 

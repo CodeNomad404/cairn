@@ -23,6 +23,7 @@ import (
 	"cairn.cn/internal/seo"
 	toolhandler "cairn.cn/internal/tool/handler"
 	toollogic "cairn.cn/internal/tool/logic"
+	toolrepo "cairn.cn/internal/tool/repository"
 )
 
 type App struct {
@@ -47,8 +48,7 @@ func New(ctx context.Context, logger *slog.Logger) (*App, error) {
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
 
-	router := buildRouter(cfg, db)
-	_ = logger
+	router := buildRouter(cfg, db, logger)
 	return &App{Config: cfg, DB: db, Router: router}, nil
 }
 
@@ -58,22 +58,24 @@ func (a *App) Close() {
 	}
 }
 
-func buildRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
+func buildRouter(cfg *config.Config, db *pgxpool.Pool, logger *slog.Logger) http.Handler {
 	// Composition root：Repository、Logic、Handler 均只组装一次，请求状态只通过 Context 传递。
 	userRepo := authrepo.NewUserRepo(db)
 	sessionRepo := authrepo.NewSessionRepo(db)
 	postRepo := blogrepo.New(db)
 	commentRepo := blogrepo.NewCommentRepo(db)
+	courseRegistrationCredentialsRepo := toolrepo.NewCourseRegistrationCredentialsRepo(db)
 
 	authLogic := authlogic.NewAuthLogic(userRepo, sessionRepo)
 	postLogic := bloglogic.NewPostLogic(postRepo)
 	commentLogic := bloglogic.NewCommentLogic(postRepo, commentRepo)
 	jsonLogic := toollogic.NewJSONLogic()
+	courseRegistrationLogic := toollogic.NewCourseRegistrationLogic(courseRegistrationCredentialsRepo, logger)
 
 	authHandler := authhandler.NewAuthHandler(authLogic, cfg.IsProduction())
 	postHandler := bloghandler.NewPostHandler(postLogic)
 	commentHandler := bloghandler.NewCommentHandler(commentLogic)
-	toolHandler := toolhandler.New(jsonLogic)
+	toolHandler := toolhandler.New(jsonLogic, courseRegistrationLogic)
 	seoHandler := seo.New(postLogic)
 
 	r := chi.NewRouter()

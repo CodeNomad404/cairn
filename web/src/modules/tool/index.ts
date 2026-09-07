@@ -1,2 +1,7 @@
-export { formatJSON } from './api/tools'
-export type { FormatJSONRequest, FormatJSONResult } from './types'
+export { formatJSON, loginCourseRegistration } from './api/tools'
+export type {
+  CourseRegistrationLoginRequest,
+  CourseRegistrationLoginResult,
+  FormatJSONRequest,
+  FormatJSONResult,
+} from './types'
