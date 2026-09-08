@@ -36,7 +36,7 @@ export type CourseGrabRequest = {
 export type CourseGrabItemResult = {
   target: string
   task_id?: number
-  status: 'not_found' | 'ambiguous' | 'already_selected' | 'available' | 'unconfirmed' | CourseGrabTaskStatus
+  status: 'already_selected' | 'ambiguous' | 'unconfirmed' | CourseGrabTaskStatus
   course?: CourseResult
   selected: boolean
   message: string
