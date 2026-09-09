@@ -54,7 +54,7 @@ const routes: RouteRecordRaw[] = [
         path: 'tools/course-registration',
         name: 'course-registration',
         component: () => import('../../modules/tool/views/CourseRegistrationView.vue'),
-        meta: { requiresAuth: true },
+        meta: { requiresAdmin: true },
       },
       {
         path: ':pathMatch(.*)*',
