@@ -1,9 +1,28 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useAuthStore } from '../../../modules/auth'
 import { APIRequestError } from '../../../shared/api/http'
 import { grabCourses, listCourses, loginCourseRegistration } from '../api/tools'
 import { useCourseGrabTasks } from '../composables/useCourseGrabTasks'
-import type { CourseGrabItemResult, CourseResult } from '../types'
+import type { CourseResult } from '../types'
+
+const authStore = useAuthStore()
+
+// 勾选持久化：按 Cairn 用户隔离，存 localStorage，刷新后恢复上次勾选
+function selectionStorageKey(): string {
+  return `cairn:tool:course-selection:${authStore.user?.id ?? ''}`
+}
+
+function restoreSelection(): string[] {
+  try {
+    const raw = localStorage.getItem(selectionStorageKey())
+    const parsed: unknown = raw ? JSON.parse(raw) : []
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((value): value is string => typeof value === 'string').slice(0, 50)
+  } catch {
+    return []
+  }
+}
 
 // ---- 教务登录 ----
 const studentId = ref('')
@@ -21,12 +40,25 @@ const courses = ref<CourseResult[]>([])
 const coursesLoading = ref(false)
 const coursesError = ref('')
 const filter = ref('')
-const selected = ref<string[]>([])
+const selected = ref<string[]>(restoreSelection())
+
+watch(selected, (value) => {
+  localStorage.setItem(selectionStorageKey(), JSON.stringify(value))
+}, { deep: true })
+
+type SortKey = 'name' | 'teacher' | 'remaining' | ''
+type StatusFilter = 'all' | 'available' | 'selected' | 'unselected'
+
+const statusFilter = ref<StatusFilter>('all')
+const sortKey = ref<SortKey>('') // '' = 后端原始顺序
+const sortDir = ref<'asc' | 'desc'>('asc')
+const pageSize = ref(20)
+const page = ref(1)
+const PAGE_SIZES = [20, 50, 100]
 
 // ---- 抢课 ----
 const grabLoading = ref(false)
 const grabError = ref('')
-const grabResults = ref<CourseGrabItemResult[]>([])
 
 const {
   tasks,
@@ -109,6 +141,12 @@ async function loadCourses() {
     const result = await listCourses()
     courses.value = result.courses
     sessionReady.value = true
+    // 列表非空时清理已不存在的勾选（如课程被教务移除），避免清空用户的正常选择
+    if (result.courses.length > 0) {
+      selected.value = selected.value.filter((name) =>
+        result.courses.some((course) => course.name === name),
+      )
+    }
   } catch (e) {
     if (isSessionMissing(e)) {
       sessionReady.value = false
@@ -161,10 +199,54 @@ async function reloginWithSaved() {
 
 const filteredCourses = computed(() => {
   const query = filter.value.trim().toLowerCase()
-  if (!query) return courses.value
-  return courses.value.filter((course) =>
+  let list = courses.value
+  if (statusFilter.value === 'available') list = list.filter((course) => course.remaining > 0)
+  else if (statusFilter.value === 'selected') list = list.filter((course) => course.selected)
+  else if (statusFilter.value === 'unselected') list = list.filter((course) => !course.selected)
+  if (!query) return list
+  return list.filter((course) =>
     course.name.toLowerCase().includes(query) || course.teacher.toLowerCase().includes(query),
   )
+})
+
+const sortedCourses = computed(() => {
+  const key = sortKey.value
+  if (!key) return filteredCourses.value
+  const dir = sortDir.value === 'asc' ? 1 : -1
+  // 拷贝后再排序，避免污染「后端原始顺序」基线
+  return [...filteredCourses.value].sort((a, b) => {
+    if (key === 'remaining') return (a.remaining - b.remaining) * dir
+    return a[key].localeCompare(b[key], 'zh-CN') * dir
+  })
+})
+
+// 正在后台抢课中的课程名集合，用于列表里标记「在抢」
+const grabbingNames = computed(() => {
+  const names = new Set<string>()
+  for (const task of tasks.value) {
+    if (task.status === 'grabbing') names.add(task.course_name)
+  }
+  return names
+})
+
+// 已加入抢课任务（抢课中或已暂停）的课程名集合，这类课程不可再勾选
+const taskedNames = computed(() => {
+  const names = new Set<string>()
+  for (const task of tasks.value) {
+    if (task.status === 'grabbing' || task.status === 'paused') names.add(task.course_name)
+  }
+  return names
+})
+
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredCourses.value.length / pageSize.value)))
+const safePage = computed(() => Math.min(Math.max(1, page.value), totalPages.value))
+const pagedCourses = computed(() => {
+  const start = (safePage.value - 1) * pageSize.value
+  return sortedCourses.value.slice(start, start + pageSize.value)
+})
+
+watch([filter, statusFilter, sortKey, sortDir, pageSize], () => {
+  page.value = 1
 })
 
 function toggleCourse(course: CourseResult) {
@@ -177,17 +259,26 @@ function toggleCourse(course: CourseResult) {
   }
 }
 
+// 点击表头循环切换：升序 → 降序 → 恢复后端原始顺序
+function cycleSort(key: 'name' | 'teacher' | 'remaining') {
+  if (sortKey.value !== key) {
+    sortKey.value = key
+    sortDir.value = 'asc'
+  } else if (sortDir.value === 'asc') {
+    sortDir.value = 'desc'
+  } else {
+    sortKey.value = ''
+    sortDir.value = 'asc'
+  }
+}
+
 async function submitGrab() {
   grabLoading.value = true
   grabError.value = ''
   try {
-    const result = await grabCourses({ courses: selected.value })
-    grabResults.value = result.results
-    // 已抢到或已选中的课程不再留在待抢列表
-    selected.value = selected.value.filter((name) => {
-      const item = result.results.find((r) => r.target === name)
-      return item === undefined || (item.status !== 'succeeded' && item.status !== 'already_selected')
-    })
+    await grabCourses({ courses: selected.value })
+    // 已处理的课程全部移出已选列表：抢到的变「已选」，没余量的进抢课任务
+    selected.value = []
     void loadCourses()
     void refreshTasks()
   } catch (e) {
@@ -267,6 +358,12 @@ onMounted(() => {
         <template v-if="sessionReady === true">
           <div class="courses-toolbar">
             <input v-model="filter" type="search" placeholder="按课程名称或教师筛选…" aria-label="筛选课程" />
+            <select v-model="statusFilter" aria-label="按状态筛选">
+              <option value="all">全部</option>
+              <option value="available">有余量</option>
+              <option value="unselected">未选</option>
+              <option value="selected">已选</option>
+            </select>
             <button type="button" class="btn ghost small" :disabled="coursesLoading" @click="loadCourses">
               {{ coursesLoading ? '加载中…' : '刷新列表' }}
             </button>
@@ -275,21 +372,30 @@ onMounted(() => {
           <p v-if="coursesError" class="panel-error" role="alert">{{ coursesError }}</p>
 
           <div v-if="courses.length > 0" class="course-list">
-            <div class="course-row course-head" aria-hidden="true">
-              <span class="course-check" />
-              <span class="course-name">课程</span>
-              <span class="course-teacher">教师</span>
-              <span class="course-remaining">余量</span>
+            <div class="course-row course-head">
+              <span class="course-check" aria-hidden="true" />
+              <button type="button" class="sort-btn course-name" @click="cycleSort('name')">
+                课程<span v-if="sortKey === 'name'" aria-hidden="true">{{ sortDir === 'asc' ? '↑' : '↓' }}</span>
+              </button>
+              <button type="button" class="sort-btn course-teacher" @click="cycleSort('teacher')">
+                教师<span v-if="sortKey === 'teacher'" aria-hidden="true">{{ sortDir === 'asc' ? '↑' : '↓' }}</span>
+              </button>
+              <button type="button" class="sort-btn course-remaining" @click="cycleSort('remaining')">
+                余量<span v-if="sortKey === 'remaining'" aria-hidden="true">{{ sortDir === 'asc' ? '↑' : '↓' }}</span>
+              </button>
             </div>
-            <label v-for="course in filteredCourses" :key="course.id ?? course.name" class="course-row">
+            <label v-for="course in pagedCourses" :key="course.id ?? course.name" class="course-row">
               <span class="course-check">
+                <span v-if="taskedNames.has(course.name)" class="badge" :class="grabbingNames.has(course.name) ? 'warn' : 'err'">
+                  {{ grabbingNames.has(course.name) ? '在抢' : '已暂停' }}
+                </span>
+                <span v-else-if="course.selected" class="badge ok">已选</span>
                 <input
-                  v-if="!course.selected"
+                  v-else
                   type="checkbox"
                   :checked="selected.includes(course.name)"
                   @change="toggleCourse(course)"
                 />
-                <span v-else class="badge ok">已选</span>
               </span>
               <span class="course-name">{{ course.name }}</span>
               <span class="course-teacher">{{ course.teacher }}</span>
@@ -301,8 +407,26 @@ onMounted(() => {
           </div>
           <p v-else-if="!coursesLoading && !coursesError" class="panel-hint">课程列表为空。</p>
 
+          <div v-if="filteredCourses.length > 0" class="pager">
+            <p class="pager-info">第 {{ safePage }} / {{ totalPages }} 页 · 共 {{ filteredCourses.length }} 门</p>
+            <div class="pager-controls">
+              <button type="button" class="btn ghost small" :disabled="safePage <= 1" @click="page = safePage - 1">上一页</button>
+              <button type="button" class="btn ghost small" :disabled="safePage >= totalPages" @click="page = safePage + 1">下一页</button>
+              <label class="pager-size">每页
+                <select v-model.number="pageSize">
+                  <option v-for="n in PAGE_SIZES" :key="n" :value="n">{{ n }}</option>
+                </select>门</label>
+            </div>
+          </div>
+
           <div class="grab-bar">
-            <p class="grab-selection">已选 {{ selected.length }} 门：{{ selected.join('、') || '—' }}</p>
+            <div class="grab-box">
+              <p class="grab-count">已选 {{ selected.length }} 门</p>
+              <ul v-if="selected.length > 0" class="grab-list">
+                <li v-for="name in selected" :key="name">{{ name }}</li>
+              </ul>
+              <p v-else class="grab-empty">—</p>
+            </div>
             <button
               type="button"
               class="btn"
@@ -314,14 +438,6 @@ onMounted(() => {
           </div>
 
           <p v-if="grabError" class="panel-error" role="alert">{{ grabError }}</p>
-
-          <ul v-if="grabResults.length > 0" class="grab-results" aria-label="抢课结果">
-            <li v-for="item in grabResults" :key="item.target">
-              <span class="badge" :class="statusClass(item.status)">{{ statusLabel(item.status) }}</span>
-              <span class="grab-target">{{ item.target }}</span>
-              <span class="grab-message">{{ item.message }}</span>
-            </li>
-          </ul>
         </template>
 
         <p v-else class="panel-hint">登录教务系统后可查看课程。</p>
@@ -455,13 +571,16 @@ onMounted(() => {
 
 /* ---------- courses ---------- */
 .courses-toolbar { display: flex; gap: .8rem; margin-bottom: 1rem; }
-.courses-toolbar input {
+.courses-toolbar input,
+.courses-toolbar select {
   flex: 1; min-width: 0;
   border: 1px solid var(--binding); border-radius: 3px;
   background: var(--paper); color: var(--ink);
   padding: .5rem .7rem; font: inherit; font-size: .9rem;
 }
-.courses-toolbar input:focus { outline: 2px solid var(--pine); border-color: var(--pine); }
+.courses-toolbar select { flex: 0 0 auto; cursor: pointer; }
+.courses-toolbar input:focus,
+.courses-toolbar select:focus { outline: 2px solid var(--pine); border-color: var(--pine); }
 
 .course-list {
   border: 1px solid var(--binding); border-radius: 4px;
@@ -481,8 +600,17 @@ onMounted(() => {
   text-transform: uppercase; color: var(--faded);
 }
 .course-head:hover { background: var(--paper-2); }
-.course-check { width: 3em; flex-shrink: 0; display: flex; }
+.sort-btn {
+  font: inherit; color: inherit; background: none; border: 0; padding: 0;
+  letter-spacing: inherit; text-transform: inherit; cursor: pointer;
+  text-align: left; display: flex; align-items: center; gap: .25rem;
+}
+.course-remaining.sort-btn { text-align: right; justify-content: flex-end; }
+.sort-btn:hover { color: var(--pine); }
+.sort-btn:focus-visible { outline: 2px solid var(--pine); }
+.course-check { min-width: 3em; flex-shrink: 0; display: flex; }
 .course-check input { accent-color: var(--pine); cursor: pointer; }
+.course-check .badge { padding: .12rem .4rem; }
 .course-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .course-teacher { width: 7em; flex-shrink: 0; color: var(--faded); }
 .course-remaining {
@@ -493,19 +621,38 @@ onMounted(() => {
 .list-empty { color: var(--faded); font-size: .85rem; padding: .8rem .9rem; }
 
 .grab-bar {
-  display: flex; justify-content: space-between; align-items: center;
-  gap: 1rem; flex-wrap: wrap;
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 1rem;
 }
-.grab-selection { margin: 0; color: var(--faded); font-size: .85rem; min-width: 0; overflow-wrap: anywhere; }
+.grab-bar .btn { flex-shrink: 0; }
+.grab-box {
+  flex: 1; min-width: 0;
+  border: 1px solid var(--binding); border-radius: 4px;
+  background: var(--paper);
+  padding: .7rem .9rem;
+  max-height: 11rem; overflow-y: auto;
+}
+.grab-count { margin: 0; color: var(--faded); font-size: .85rem; }
+.grab-list { list-style: none; margin: .5rem 0 0; padding: 0; }
+.grab-list li {
+  font-size: .85rem; overflow-wrap: anywhere;
+  padding: .15rem 0;
+}
+.grab-list li + li { border-top: 1px dashed var(--rule); }
+.grab-empty { margin: .5rem 0 0; color: var(--faded); font-size: .85rem; }
 
-.grab-results { list-style: none; margin: 1.2rem 0 0; padding: 0; }
-.grab-results li {
-  display: flex; gap: .8rem; align-items: baseline; flex-wrap: wrap;
-  padding: .5rem 0; border-top: 1px dashed var(--rule);
-  font-size: .85rem;
+.pager {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 1rem; flex-wrap: wrap; margin: 0 0 1.2rem;
 }
-.grab-target { font-family: var(--mono); font-size: .8rem; }
-.grab-message { color: var(--faded); }
+.pager-info { margin: 0; color: var(--faded); font-size: .85rem; }
+.pager-controls { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
+.pager-size { color: var(--faded); font-size: .85rem; display: flex; align-items: center; gap: .4rem; }
+.pager-size select {
+  border: 1px solid var(--binding); border-radius: 3px;
+  background: var(--paper); color: var(--ink);
+  padding: .2rem .4rem; font: inherit; font-size: .85rem; cursor: pointer;
+}
 
 /* ---------- tasks ---------- */
 .worker-row {
@@ -532,5 +679,7 @@ onMounted(() => {
 @media (max-width: 720px) {
   .login-grid { grid-template-columns: 1fr; }
   .course-teacher { width: auto; }
+  .grab-bar { flex-direction: column; align-items: stretch; }
+  .grab-bar .btn { align-self: flex-end; }
 }
 </style>
