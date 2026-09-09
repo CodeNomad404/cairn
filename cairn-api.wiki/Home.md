@@ -16,7 +16,7 @@ Cairn（cairn.cn）后端接口文档，供前端开发使用。
 | [api/auth/](api/auth/) | 认证：注册 / 登录 / 登出 / 当前用户 |
 | [api/blog/post/](api/blog/post/) | 博客·文章：创建 / 列表 / 详情 / 删除 |
 | [api/blog/comment/](api/blog/comment/) | 博客·评论：创建 / 列表 / 删除 |
-| [api/tool/](api/tool/) | 工具：JSON 格式化 |
+| [api/tool/](api/tool/) | 工具：JSON 格式化、教务系统登录与抢课 |
 | [api/public/](api/public/) | 公共端点：健康检查、robots.txt、sitemap.xml |
 
 ## 登录
@@ -38,3 +38,12 @@ Cairn（cairn.cn）后端接口文档，供前端开发使用。
 | DELETE | /api/v1/comments/{id} | 登录 | 删除评论 |
 
 > 各接口的请求参数、成功响应与预期失败详见对应文档。
+
+## 教务系统与抢课
+
+| 文档 | 内容 |
+|---|---|
+| [教务系统登录](api/tool/course_registration_login.md) | 登录 BJTU、保存凭据及登录次数 |
+| [本方案课程列表](api/tool/course_registration_courses.md) | 查询完整课程名称、教师、余量和已选状态 |
+| [新增抢课课程](api/tool/course_registration_grab.md) | 同步判断课程状态，必要时加入后台队列 |
+| [抢课任务](api/tool/course_registration_tasks.md) | 查询任务以及按课程暂停、恢复 |

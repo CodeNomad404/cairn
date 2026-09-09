@@ -51,6 +51,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('../../modules/tool/views/DiffToolView.vue'),
       },
       {
+        path: 'tools/course-registration',
+        name: 'course-registration',
+        component: () => import('../../modules/tool/views/CourseRegistrationView.vue'),
+        meta: { requiresAdmin: true },
+      },
+      {
         path: ':pathMatch(.*)*',
         name: 'not-found',
         component: () => import('../../modules/blog/views/NotFoundView.vue'),

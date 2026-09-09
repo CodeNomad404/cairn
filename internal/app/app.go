@@ -27,9 +27,10 @@ import (
 )
 
 type App struct {
-	Config *config.Config
-	DB     *pgxpool.Pool
-	Router http.Handler
+	Config       *config.Config
+	DB           *pgxpool.Pool
+	Router       http.Handler
+	workerCancel context.CancelFunc
 }
 
 func New(ctx context.Context, logger *slog.Logger) (*App, error) {
@@ -48,34 +49,51 @@ func New(ctx context.Context, logger *slog.Logger) (*App, error) {
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
 
-	router := buildRouter(cfg, db, logger)
-	return &App{Config: cfg, DB: db, Router: router}, nil
+	workerContext, workerCancel := context.WithCancel(context.Background())
+	router, courseRegistrationLogic := buildRouter(cfg, db, logger)
+	if err := courseRegistrationLogic.StartWorkers(workerContext); err != nil {
+		workerCancel()
+		db.Close()
+		return nil, fmt.Errorf("start course grab workers: %w", err)
+	}
+	return &App{Config: cfg, DB: db, Router: router, workerCancel: workerCancel}, nil
 }
 
 func (a *App) Close() {
+	if a.workerCancel != nil {
+		a.workerCancel()
+	}
 	if a.DB != nil {
 		a.DB.Close()
 	}
 }
 
-func buildRouter(cfg *config.Config, db *pgxpool.Pool, logger *slog.Logger) http.Handler {
+func buildRouter(
+	cfg *config.Config,
+	db *pgxpool.Pool,
+	logger *slog.Logger,
+) (http.Handler, *toollogic.CourseRegistrationLogic) {
 	// Composition root：Repository、Logic、Handler 均只组装一次，请求状态只通过 Context 传递。
 	userRepo := authrepo.NewUserRepo(db)
 	sessionRepo := authrepo.NewSessionRepo(db)
 	postRepo := blogrepo.New(db)
 	commentRepo := blogrepo.NewCommentRepo(db)
 	courseRegistrationCredentialsRepo := toolrepo.NewCourseRegistrationCredentialsRepo(db)
+	courseGrabRepo := toolrepo.NewCourseGrabRepo(db)
 
 	authLogic := authlogic.NewAuthLogic(userRepo, sessionRepo)
 	postLogic := bloglogic.NewPostLogic(postRepo)
 	commentLogic := bloglogic.NewCommentLogic(postRepo, commentRepo)
 	jsonLogic := toollogic.NewJSONLogic()
-	courseRegistrationLogic := toollogic.NewCourseRegistrationLogic(courseRegistrationCredentialsRepo, logger)
+	courseRegistrationLogic := toollogic.NewCourseRegistrationLogic(
+		courseRegistrationCredentialsRepo, courseGrabRepo, logger,
+	)
 
 	authHandler := authhandler.NewAuthHandler(authLogic, cfg.IsProduction())
 	postHandler := bloghandler.NewPostHandler(postLogic)
 	commentHandler := bloghandler.NewCommentHandler(commentLogic)
-	toolHandler := toolhandler.New(jsonLogic, courseRegistrationLogic)
+	toolHandler := toolhandler.New(jsonLogic)
+	courseHandler := toolhandler.NewCourseHandler(courseRegistrationLogic)
 	seoHandler := seo.New(postLogic)
 
 	r := chi.NewRouter()
@@ -95,9 +113,10 @@ func buildRouter(cfg *config.Config, db *pgxpool.Pool, logger *slog.Logger) http
 		postHandler.RegisterRoutes(r)
 		commentHandler.RegisterRoutes(r)
 		toolHandler.RegisterRoutes(r)
+		courseHandler.RegisterRoutes(r)
 	})
 
-	return r
+	return r, courseRegistrationLogic
 }
 
 func healthz(w http.ResponseWriter, r *http.Request) {

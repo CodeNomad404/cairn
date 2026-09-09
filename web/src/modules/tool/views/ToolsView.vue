@@ -1,4 +1,10 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useAuthStore } from '../../auth'
+
+const auth = useAuthStore()
+// 教务抢课仅管理员可见；用户信息未加载完成前先显示，避免管理员看到卡片闪烁
+const isAdmin = computed(() => auth.user?.role === 'admin' || !auth.initialized)
 </script>
 
 <template>
@@ -17,6 +23,10 @@
         <RouterLink to="/tools/diff" class="tool-card">
           <h2>文本 Diff</h2>
           <p>比较两段文本的差异，实时高亮增删改动。</p>
+        </RouterLink>
+        <RouterLink v-if="isAdmin" to="/tools/course-registration" class="tool-card">
+          <h2>教务抢课</h2>
+          <p>登录教务系统看余量、一键抢课，没有余量的课程自动排队。</p>
         </RouterLink>
       </div>
     </div>
