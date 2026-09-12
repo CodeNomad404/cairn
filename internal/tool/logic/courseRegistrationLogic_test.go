@@ -194,7 +194,7 @@ func TestCourseRegistrationLogin(t *testing.T) {
 	}
 
 	listed, code, err := l.ListCourses(context.Background(), 7)
-	if err != nil || code != httpx.CodeSuccess || len(listed.Courses) != 1 {
+	if err != nil || code != httpx.CodeSuccess || !listed.SelectionOpen || len(listed.Courses) != 1 {
 		t.Fatalf("list result = %#v, code = %d, err = %v", listed, code, err)
 	}
 	if listed.Courses[0].ID != "course-123" || listed.Courses[0].Remaining != 3 {
@@ -220,6 +220,41 @@ func TestCourseRegistrationLogin(t *testing.T) {
 	}
 	if repo.upsertCount != 1 {
 		t.Fatalf("saved credentials were written again: upsert count = %d", repo.upsertCount)
+	}
+}
+
+func TestListCourses_SelectionClosed(t *testing.T) {
+	var selectionRequests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/module/module/10/":
+			_, _ = w.Write([]byte("AA home"))
+		case "/course_selection/courseselecttask/selects/":
+			selectionRequests.Add(1)
+			_, _ = w.Write([]byte("选课已关闭"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	l := testCourseRegistrationLogic(t, server.URL, &fakeCourseRegistrationCredentialsRepo{})
+	l.sessions[7] = server.Client()
+
+	listed, code, err := l.ListCourses(context.Background(), 7)
+	if err != nil || code != httpx.CodeSuccess {
+		t.Fatalf("list result = %#v, code = %d, err = %v", listed, code, err)
+	}
+	if listed.SelectionOpen || listed.Courses == nil || len(listed.Courses) != 0 {
+		t.Fatalf("closed selection result = %#v", listed)
+	}
+	if selectionRequests.Load() != 1 {
+		t.Fatalf("selection page requests = %d, want 1", selectionRequests.Load())
+	}
+
+	_, code, err = l.GrabCourses(context.Background(), 7, []string{"高等数学"})
+	if err == nil || code != httpx.CodeValidationFailed {
+		t.Fatalf("grab while closed: code = %d, err = %v", code, err)
 	}
 }
 

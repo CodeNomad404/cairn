@@ -34,6 +34,7 @@ const loginError = ref('')
 /** null = 正在探测会话；true = 已建立 BJTU 会话；false = 未登录 */
 const sessionReady = ref<boolean | null>(null)
 const showLoginForm = ref(false)
+const selectionOpen = ref<boolean | null>(null)
 
 // ---- 课程列表 ----
 const courses = ref<CourseResult[]>([])
@@ -96,6 +97,7 @@ const MESSAGE_MAP: Record<string, string> = {
   'saved course registration credentials not found': '尚未保存过教务凭据，请填写下方信息登录',
   'BJTU login session not found': '尚未登录教务系统',
   'BJTU academic system session expired': '教务会话已过期，请重新登录',
+  'BJTU course selection is closed': '当前选课阶段未开放',
 }
 
 function friendlyError(error: unknown): string {
@@ -141,6 +143,7 @@ async function loadCourses() {
     const result = await listCourses()
     courses.value = result.courses
     sessionReady.value = true
+    selectionOpen.value = result.selection_open
     // 列表非空时清理已不存在的勾选（如课程被教务移除），避免清空用户的正常选择
     if (result.courses.length > 0) {
       selected.value = selected.value.filter((name) =>
@@ -152,7 +155,11 @@ async function loadCourses() {
       sessionReady.value = false
     } else {
       coursesError.value = friendlyError(e)
+      loginError.value = `检查教务状态失败：${friendlyError(e)}`
+      sessionReady.value = false
+      showLoginForm.value = true
     }
+    selectionOpen.value = null
   } finally {
     coursesLoading.value = false
   }
@@ -356,7 +363,11 @@ onMounted(() => {
         <h2 id="section-courses">课程列表</h2>
 
         <template v-if="sessionReady === true">
-          <div class="courses-toolbar">
+          <p v-if="selectionOpen === false" class="panel-hint">
+            当前选课阶段未开放。教务登录正常，开放后刷新课程列表即可。
+          </p>
+
+          <div v-if="selectionOpen" class="courses-toolbar">
             <input v-model="filter" type="search" placeholder="按课程名称或教师筛选…" aria-label="筛选课程" />
             <select v-model="statusFilter" aria-label="按状态筛选">
               <option value="all">全部</option>
@@ -369,9 +380,9 @@ onMounted(() => {
             </button>
           </div>
 
-          <p v-if="coursesError" class="panel-error" role="alert">{{ coursesError }}</p>
+          <p v-if="coursesError && selectionOpen !== false" class="panel-error" role="alert">{{ coursesError }}</p>
 
-          <div v-if="courses.length > 0" class="course-list">
+          <div v-if="selectionOpen && courses.length > 0" class="course-list">
             <div class="course-row course-head">
               <span class="course-check" aria-hidden="true" />
               <button type="button" class="sort-btn course-name" @click="cycleSort('name')">
@@ -405,9 +416,9 @@ onMounted(() => {
             </label>
             <p v-if="filteredCourses.length === 0" class="list-empty">没有匹配的课程。</p>
           </div>
-          <p v-else-if="!coursesLoading && !coursesError" class="panel-hint">课程列表为空。</p>
+          <p v-else-if="selectionOpen && !coursesLoading && !coursesError" class="panel-hint">课程列表为空。</p>
 
-          <div v-if="filteredCourses.length > 0" class="pager">
+          <div v-if="selectionOpen && filteredCourses.length > 0" class="pager">
             <p class="pager-info">第 {{ safePage }} / {{ totalPages }} 页 · 共 {{ filteredCourses.length }} 门</p>
             <div class="pager-controls">
               <button type="button" class="btn ghost small" :disabled="safePage <= 1" @click="page = safePage - 1">上一页</button>
@@ -419,7 +430,7 @@ onMounted(() => {
             </div>
           </div>
 
-          <div class="grab-bar">
+          <div v-if="selectionOpen" class="grab-bar">
             <div class="grab-box">
               <p class="grab-count">已选 {{ selected.length }} 门</p>
               <ul v-if="selected.length > 0" class="grab-list">
@@ -437,7 +448,7 @@ onMounted(() => {
             </button>
           </div>
 
-          <p v-if="grabError" class="panel-error" role="alert">{{ grabError }}</p>
+          <p v-if="selectionOpen && grabError" class="panel-error" role="alert">{{ grabError }}</p>
         </template>
 
         <p v-else class="panel-hint">登录教务系统后可查看课程。</p>

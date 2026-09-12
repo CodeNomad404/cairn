@@ -116,9 +116,13 @@ paths:
         '422': { description: Captcha recognition failed }
   /tools/course-registration/courses:
     get:
-      summary: List required-plan BJTU courses available to the current student
+      summary: Report whether BJTU course selection is open and list the current student's courses
       responses:
-        '200': { description: Available and already selected courses }
+        '200':
+          description: Course-selection status and courses; courses is empty while selection is closed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourseListResult' }
         '401': { description: Cairn or BJTU session required }
   /tools/course-registration/grab:
     post:
@@ -173,6 +177,22 @@ components:
       oneOf:
         - { $ref: '#/components/schemas/CourseRegistrationCredentials' }
         - { type: object, maxProperties: 0 }
+    CourseListResult:
+      type: object
+      required: [selection_open, courses]
+      properties:
+        selection_open: { type: boolean }
+        courses:
+          type: array
+          items:
+            type: object
+            required: [name, teacher, remaining, selected]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              teacher: { type: string }
+              remaining: { type: integer }
+              selected: { type: boolean }
     CourseGrabRequest:
       type: object
       required: [courses]

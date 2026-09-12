@@ -108,7 +108,8 @@ type CourseResult struct {
 }
 
 type CourseListResult struct {
-	Courses []CourseResult `json:"courses"`
+	SelectionOpen bool           `json:"selection_open"`
+	Courses       []CourseResult `json:"courses"`
 }
 
 type CourseSelectionResult struct {
@@ -203,8 +204,12 @@ func (l *CourseRegistrationLogic) ListCourses(
 	ctx context.Context,
 	userID int64,
 ) (CourseListResult, httpx.Code, error) {
-	if _, code, err := l.OpenCourseSelection(ctx, userID); err != nil {
+	opened, code, err := l.OpenCourseSelection(ctx, userID)
+	if err != nil {
 		return CourseListResult{}, code, err
+	}
+	if !opened.SelectionOpen {
+		return CourseListResult{Courses: []CourseResult{}}, httpx.CodeSuccess, nil
 	}
 	client := l.session(userID)
 	body, finalURL, err := getPage(ctx, client, l.aaCourseSelectionURL, maxHTMLBytes)
@@ -221,7 +226,7 @@ func (l *CourseRegistrationLogic) ListCourses(
 		return CourseListResult{}, httpx.CodeInternalError,
 			httpx.NewAppError("BJTU course list changed", err)
 	}
-	return CourseListResult{Courses: courses}, httpx.CodeSuccess, nil
+	return CourseListResult{SelectionOpen: true, Courses: courses}, httpx.CodeSuccess, nil
 }
 
 // GrabCourses 同步确认课程状态，仅将确认暂无余量的课程写入抢课队列。
@@ -233,6 +238,10 @@ func (l *CourseRegistrationLogic) GrabCourses(
 	listed, code, err := l.ListCourses(ctx, userID)
 	if err != nil {
 		return CourseGrabResult{}, code, err
+	}
+	if !listed.SelectionOpen {
+		return CourseGrabResult{}, httpx.CodeValidationFailed,
+			httpx.NewAppError("BJTU course selection is closed", nil)
 	}
 	result := CourseGrabResult{Results: make([]CourseGrabItemResult, 0, len(targets))}
 	createdTask := false
@@ -479,6 +488,9 @@ func (l *CourseRegistrationLogic) processUserCourses(ctx context.Context, userID
 	}
 	if err != nil {
 		return true, err
+	}
+	if !listed.SelectionOpen {
+		return false, l.grabRepo.SetWorkerStatus(ctx, userID, "idle")
 	}
 	for index := range items {
 		if err := l.processCourseGrabItem(ctx, &items[index], listed.Courses); err != nil {
