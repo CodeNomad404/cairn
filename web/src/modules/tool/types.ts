@@ -26,6 +26,7 @@ export type CourseResult = {
 }
 
 export type CourseListResult = {
+  selection_open: boolean
   courses: CourseResult[]
 }
 

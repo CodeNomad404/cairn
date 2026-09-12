@@ -16,6 +16,7 @@ HTTP `200 OK`
 {
   "code": 0,
   "data": {
+    "selection_open": true,
     "courses": [
       {
         "name": "M302006B:计算机体系结构 01 计算机学院",
@@ -37,6 +38,7 @@ HTTP `200 OK`
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
+| `selection_open` | `boolean` | 当前网上选课阶段是否开放；关闭时 `courses` 为空数组 |
 | `id` | `string` | 教务系统内部课程 ID；已选课程或不可提交的课程可能没有该字段 |
 | `name` | `string` | 完整课程名称，是新增抢课课程时使用的精确标识 |
 | `teacher` | `string` | 任课教师 |
@@ -44,6 +46,18 @@ HTTP `200 OK`
 | `selected` | `boolean` | 当前学生是否已经选中 |
 
 前端应让用户从该列表中选择课程，并将完整 `name` 原样提交给抢课新增接口。不要只提交课程号或课程名称。
+
+当前选课阶段关闭时仍返回 `200 OK`，用于区分“尚未开放”和“登录失败”：
+
+```json
+{
+  "code": 0,
+  "data": {
+    "selection_open": false,
+    "courses": []
+  }
+}
+```
 
 ## 失败响应
 
