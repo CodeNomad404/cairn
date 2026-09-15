@@ -12,18 +12,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	authhandler "cairn.cn/internal/auth/handler"
-	authlogic "cairn.cn/internal/auth/logic"
 	authmid "cairn.cn/internal/auth/middleware"
-	authrepo "cairn.cn/internal/auth/repository"
-	bloghandler "cairn.cn/internal/blog/handler"
-	bloglogic "cairn.cn/internal/blog/logic"
-	blogrepo "cairn.cn/internal/blog/repository"
 	"cairn.cn/internal/config"
 	webmw "cairn.cn/internal/middleware"
-	"cairn.cn/internal/seo"
-	toolhandler "cairn.cn/internal/tool/handler"
-	toollogic "cairn.cn/internal/tool/logic"
-	toolrepo "cairn.cn/internal/tool/repository"
 )
 
 type App struct {
@@ -49,12 +40,13 @@ func New(ctx context.Context, logger *slog.Logger) (*App, error) {
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
 
+	components := newApplicationComponents(cfg, db, logger)
+	router := buildRouter(cfg, components)
 	workerContext, workerCancel := context.WithCancel(context.Background())
-	router, courseRegistrationLogic := buildRouter(cfg, db, logger)
-	if err := courseRegistrationLogic.StartWorkers(workerContext); err != nil {
+	if err := startBackgroundWorkers(workerContext, cfg, components); err != nil {
 		workerCancel()
 		db.Close()
-		return nil, fmt.Errorf("start course grab workers: %w", err)
+		return nil, err
 	}
 	return &App{Config: cfg, DB: db, Router: router, workerCancel: workerCancel}, nil
 }
@@ -70,32 +62,8 @@ func (a *App) Close() {
 
 func buildRouter(
 	cfg *config.Config,
-	db *pgxpool.Pool,
-	logger *slog.Logger,
-) (http.Handler, *toollogic.CourseRegistrationLogic) {
-	// Composition root：Repository、Logic、Handler 均只组装一次，请求状态只通过 Context 传递。
-	userRepo := authrepo.NewUserRepo(db)
-	sessionRepo := authrepo.NewSessionRepo(db)
-	postRepo := blogrepo.New(db)
-	commentRepo := blogrepo.NewCommentRepo(db)
-	courseRegistrationCredentialsRepo := toolrepo.NewCourseRegistrationCredentialsRepo(db)
-	courseGrabRepo := toolrepo.NewCourseGrabRepo(db)
-
-	authLogic := authlogic.NewAuthLogic(userRepo, sessionRepo)
-	postLogic := bloglogic.NewPostLogic(postRepo)
-	commentLogic := bloglogic.NewCommentLogic(postRepo, commentRepo)
-	jsonLogic := toollogic.NewJSONLogic()
-	courseRegistrationLogic := toollogic.NewCourseRegistrationLogic(
-		courseRegistrationCredentialsRepo, courseGrabRepo, logger,
-	)
-
-	authHandler := authhandler.NewAuthHandler(authLogic, cfg.IsProduction())
-	postHandler := bloghandler.NewPostHandler(postLogic)
-	commentHandler := bloghandler.NewCommentHandler(commentLogic)
-	toolHandler := toolhandler.New(jsonLogic)
-	courseHandler := toolhandler.NewCourseHandler(courseRegistrationLogic)
-	seoHandler := seo.New(postLogic)
-
+	components *applicationComponents,
+) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(webmw.TrustedProxyRealIP())
@@ -104,19 +72,20 @@ func buildRouter(
 	r.Use(middleware.Timeout(30 * time.Second))
 	r.Use(webmw.SecurityHeaders(cfg.IsProduction()))
 	r.Use(webmw.SameOrigin())
-	r.Use(authmid.LoadUser(authLogic))
+	r.Use(authmid.LoadUser(components.authLogic))
 
 	r.Get("/healthz", healthz)
-	seoHandler.RegisterRoutes(r)
+	components.seoHandler.RegisterRoutes(r)
 	r.Route("/api/v1", func(r chi.Router) {
-		r.With(webmw.RateLimit(10, time.Minute)).Mount("/auth", authRoutes(authHandler))
-		postHandler.RegisterRoutes(r)
-		commentHandler.RegisterRoutes(r)
-		toolHandler.RegisterRoutes(r)
-		courseHandler.RegisterRoutes(r)
+		r.With(webmw.RateLimit(10, time.Minute)).Mount("/auth", authRoutes(components.authHandler))
+		components.postHandler.RegisterRoutes(r)
+		components.commentHandler.RegisterRoutes(r)
+		components.toolHandler.RegisterRoutes(r)
+		components.courseHandler.RegisterRoutes(r)
+		components.classroomHandler.RegisterRoutes(r)
 	})
 
-	return r, courseRegistrationLogic
+	return r
 }
 
 func healthz(w http.ResponseWriter, r *http.Request) {

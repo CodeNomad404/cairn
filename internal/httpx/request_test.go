@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -232,4 +233,65 @@ func TestParsePagination_ErrorContract(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/posts?page=abc", nil)
 	_, err := ParsePagination(r)
 	wantAppError(t, err, "参数错误", true)
+}
+
+func TestParseQueryValues(t *testing.T) {
+	location := time.FixedZone("test", 8*60*60)
+	defaultDate := time.Date(2026, time.September, 15, 10, 0, 0, 0, location)
+	r := httptest.NewRequest(
+		http.MethodGet,
+		"/?period=3&building_id=%20SY%20&date=2026-09-16",
+		nil,
+	)
+
+	period, err := ParseQueryInt(r, "period", 0, 1, 7)
+	if err != nil || period != 3 {
+		t.Fatalf("period = %d, err = %v", period, err)
+	}
+	buildingID, err := ParseQueryString(r, "building_id", 16)
+	if err != nil || buildingID != "SY" {
+		t.Fatalf("building ID = %q, err = %v", buildingID, err)
+	}
+	date, err := ParseQueryDate(r, "date", defaultDate)
+	if err != nil || date.Format(time.DateOnly) != "2026-09-16" || date.Location() != location {
+		t.Fatalf("date = %v, err = %v", date, err)
+	}
+}
+
+func TestParseQueryValuesRejectInvalidInput(t *testing.T) {
+	tests := []struct {
+		name  string
+		query string
+		parse func(*http.Request) error
+	}{
+		{
+			name: "integer range", query: "?period=8",
+			parse: func(r *http.Request) error {
+				_, err := ParseQueryInt(r, "period", 0, 1, 7)
+				return err
+			},
+		},
+		{
+			name: "string length", query: "?building_id=too-long",
+			parse: func(r *http.Request) error {
+				_, err := ParseQueryString(r, "building_id", 3)
+				return err
+			},
+		},
+		{
+			name: "date format", query: "?date=2026/09/15",
+			parse: func(r *http.Request) error {
+				_, err := ParseQueryDate(r, "date", time.Now())
+				return err
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "/"+test.query, nil)
+			if err := test.parse(r); err == nil {
+				t.Fatal("invalid query accepted")
+			}
+		})
+	}
 }

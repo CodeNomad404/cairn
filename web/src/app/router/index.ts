@@ -57,6 +57,12 @@ const routes: RouteRecordRaw[] = [
         meta: { requiresAdmin: true },
       },
       {
+        path: 'tools/classroom',
+        name: 'classroom-tool',
+        component: () => import('../../modules/tool/views/ClassroomView.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
         path: ':pathMatch(.*)*',
         name: 'not-found',
         component: () => import('../../modules/blog/views/NotFoundView.vue'),

@@ -24,6 +24,10 @@ const isAdmin = computed(() => auth.user?.role === 'admin' || !auth.initialized)
           <h2>文本 Diff</h2>
           <p>比较两段文本的差异，实时高亮增删改动。</p>
         </RouterLink>
+        <RouterLink to="/tools/classroom" class="tool-card">
+          <h2>空闲教室</h2>
+          <p>按教学楼、节次和占用状态查询今天的教室。</p>
+        </RouterLink>
         <RouterLink v-if="isAdmin" to="/tools/course-registration" class="tool-card">
           <h2>教务抢课</h2>
           <p>登录教务系统看余量、一键抢课，没有余量的课程自动排队。</p>

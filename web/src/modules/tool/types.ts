@@ -74,3 +74,34 @@ export type CourseGrabTaskListResult = {
 export type CourseGrabTaskStatusRequest = {
   status: 'grabbing' | 'paused'
 }
+
+export type ClassroomOccupationType =
+  | 'free'
+  | 'scheduled'
+  | 'rescheduled'
+  | 'exam'
+  | 'laboratory'
+  | 'other'
+
+export type ClassroomListParams = {
+  date?: string
+  period?: number
+  building_id?: string
+  min_capacity?: number
+}
+
+export type ClassroomRoom = {
+  period: number
+  building_id: string
+  building_name: string
+  room_name: string
+  capacity: number
+  occupation_type: ClassroomOccupationType
+}
+
+export type ClassroomListResult = {
+  date: string
+  period?: number
+  synced_at?: string
+  rooms: ClassroomRoom[]
+}

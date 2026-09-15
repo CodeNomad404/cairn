@@ -29,3 +29,16 @@ type CourseGrabRepo interface {
 	SetItemStatus(ctx context.Context, userID, itemID int64, status, message string) (*toolmodel.CourseGrabItem, error)
 	GetJobSummary(ctx context.Context, userID int64) (toolmodel.CourseGrabJobSummary, error)
 }
+
+type ClassroomAvailabilityQuery struct {
+	Date        time.Time
+	Period      int
+	BuildingID  string
+	MinCapacity int
+}
+
+type ClassroomAvailabilityRepo interface {
+	ReplaceSnapshot(ctx context.Context, items []toolmodel.ClassroomAvailability) error
+	List(ctx context.Context, query ClassroomAvailabilityQuery) ([]toolmodel.ClassroomAvailability, *time.Time, error)
+	LastSyncedAt(ctx context.Context) (*time.Time, error)
+}

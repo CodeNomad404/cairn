@@ -1,5 +1,7 @@
 import { request } from '../../../shared/api/http'
 import type {
+  ClassroomListParams,
+  ClassroomListResult,
   CourseRegistrationLoginRequest,
   CourseRegistrationLoginResult,
   CourseGrabRequest,
@@ -11,6 +13,15 @@ import type {
   FormatJSONRequest,
   FormatJSONResult,
 } from '../types'
+
+export function listClassrooms(input: ClassroomListParams = {}) {
+  const params: Record<string, string | number> = {}
+  if (input.date !== undefined) params.date = input.date
+  if (input.period !== undefined) params.period = input.period
+  if (input.building_id !== undefined) params.building_id = input.building_id
+  if (input.min_capacity !== undefined) params.min_capacity = input.min_capacity
+  return request<ClassroomListResult>('/api/v1/tool/classroom/list', { params })
+}
 
 export function formatJSON(input: FormatJSONRequest) {
   return request<FormatJSONResult>('/api/v1/tools/json/format', {
