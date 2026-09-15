@@ -31,7 +31,7 @@ type CourseGrabRepo interface {
 }
 
 type ClassroomAvailabilityQuery struct {
-	Date        time.Time
+	Weekday     int
 	Period      int
 	BuildingID  string
 	MinCapacity int

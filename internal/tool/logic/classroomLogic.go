@@ -81,15 +81,16 @@ func (l *ClassroomLogic) List(
 	minCapacity int,
 ) (ClassroomListResult, httpx.Code, error) {
 	query := tool.ClassroomAvailabilityQuery{
-		Date: date, Period: period, BuildingID: buildingID, MinCapacity: minCapacity,
+		Weekday: isoWeekday(date), Period: period, BuildingID: buildingID, MinCapacity: minCapacity,
 	}
 	items, syncedAt, err := l.repo.List(ctx, query)
 	if err != nil {
 		return ClassroomListResult{}, httpx.CodeInternalError,
 			httpx.NewAppError("读取教室列表失败", err)
 	}
-	if syncedAt == nil && sameLocalDate(date, time.Now()) {
-		code, err := l.ensureDateSynced(ctx, userID, query)
+	now := time.Now().In(classroomLocation)
+	if sameLocalDate(date, now) && (syncedAt == nil || !sameLocalDate(*syncedAt, now)) {
+		code, err := l.ensureWeekdaySynced(ctx, userID, query)
 		if err != nil {
 			return ClassroomListResult{}, code, err
 		}
@@ -165,7 +166,7 @@ func (l *ClassroomLogic) synchronizeAndLog(ctx context.Context, userID int64) {
 	l.logger.InfoContext(ctx, "classroom synchronization completed", "records", count)
 }
 
-func (l *ClassroomLogic) ensureDateSynced(
+func (l *ClassroomLogic) ensureWeekdaySynced(
 	ctx context.Context,
 	userID int64,
 	query tool.ClassroomAvailabilityQuery,
@@ -177,7 +178,7 @@ func (l *ClassroomLogic) ensureDateSynced(
 	if err != nil {
 		return httpx.CodeInternalError, httpx.NewAppError("读取教室列表失败", err)
 	}
-	if syncedAt != nil {
+	if syncedAt != nil && sameLocalDate(*syncedAt, time.Now().In(classroomLocation)) {
 		return httpx.CodeSuccess, nil
 	}
 	_, code, err := l.synchronize(ctx, userID)
@@ -498,4 +499,12 @@ func sameLocalDate(left, right time.Time) bool {
 	left = left.In(classroomLocation)
 	right = right.In(classroomLocation)
 	return left.Year() == right.Year() && left.YearDay() == right.YearDay()
+}
+
+func isoWeekday(value time.Time) int {
+	weekday := int(value.In(classroomLocation).Weekday())
+	if weekday == 0 {
+		return 7
+	}
+	return weekday
 }
