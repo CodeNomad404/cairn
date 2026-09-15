@@ -152,38 +152,12 @@ func (l *CourseRegistrationLogic) OpenCourseSelection(
 	ctx context.Context,
 	userID int64,
 ) (CourseRegistrationOpenResult, httpx.Code, error) {
-	l.mu.RLock()
-	client := l.sessions[userID]
-	l.mu.RUnlock()
-	if client == nil {
-		return CourseRegistrationOpenResult{}, httpx.CodeUnauthorized,
-			httpx.NewAppError("BJTU login session not found", nil)
-	}
-
-	// 1. 与 CC.py 一致，先从 MIS 的“教务系统”模块建立 AA 会话。
-	modulePage, finalURL, err := getPage(ctx, client, l.misCourseModuleURL, maxHTMLBytes)
+	client, code, err := l.openAcademicSystem(ctx, userID)
 	if err != nil {
-		return CourseRegistrationOpenResult{}, httpx.CodeInternalError,
-			httpx.NewAppError("failed to enter BJTU academic system", err)
-	}
-	if finalURL.Host != l.aaHost {
-		entryURL, err := findURLForHost(bytes.NewReader(modulePage), finalURL, l.aaHost)
-		if err != nil {
-			return CourseRegistrationOpenResult{}, httpx.CodeInternalError,
-				httpx.NewAppError("BJTU academic system entry changed", err)
-		}
-		_, finalURL, err = getPage(ctx, client, entryURL.String(), maxHTMLBytes)
-		if err != nil {
-			return CourseRegistrationOpenResult{}, httpx.CodeInternalError,
-				httpx.NewAppError("failed to enter BJTU academic system", err)
-		}
-		if finalURL.Host != l.aaHost {
-			return CourseRegistrationOpenResult{}, httpx.CodeUnauthorized,
-				httpx.NewAppError("BJTU academic system login failed", nil)
-		}
+		return CourseRegistrationOpenResult{}, code, err
 	}
 
-	// 2. 打开“课程选课 → 选课 → 网上选课”，页面会明确显示当前阶段是否开放。
+	// 打开“课程选课 → 选课 → 网上选课”，页面会明确显示当前阶段是否开放。
 	body, finalURL, err := getPage(ctx, client, l.aaCourseSelectionURL, maxHTMLBytes)
 	if err != nil {
 		return CourseRegistrationOpenResult{}, httpx.CodeInternalError,
@@ -197,6 +171,43 @@ func (l *CourseRegistrationLogic) OpenCourseSelection(
 	selectionOpen := !bytes.Contains(body, []byte("选课已关闭")) &&
 		(bytes.Contains(body, []byte(`id="select-submit-btn"`)) || bytes.Contains(body, []byte(`id="current"`)))
 	return CourseRegistrationOpenResult{Entered: true, SelectionOpen: selectionOpen}, httpx.CodeSuccess, nil
+}
+
+func (l *CourseRegistrationLogic) openAcademicSystem(
+	ctx context.Context,
+	userID int64,
+) (*http.Client, httpx.Code, error) {
+	l.mu.RLock()
+	client := l.sessions[userID]
+	l.mu.RUnlock()
+	if client == nil {
+		return nil, httpx.CodeUnauthorized,
+			httpx.NewAppError("BJTU login session not found", nil)
+	}
+
+	// 从 MIS 的“教务系统”模块建立 AA 会话。
+	modulePage, finalURL, err := getPage(ctx, client, l.misCourseModuleURL, maxHTMLBytes)
+	if err != nil {
+		return nil, httpx.CodeInternalError,
+			httpx.NewAppError("failed to enter BJTU academic system", err)
+	}
+	if finalURL.Host != l.aaHost {
+		entryURL, err := findURLForHost(bytes.NewReader(modulePage), finalURL, l.aaHost)
+		if err != nil {
+			return nil, httpx.CodeInternalError,
+				httpx.NewAppError("BJTU academic system entry changed", err)
+		}
+		_, finalURL, err = getPage(ctx, client, entryURL.String(), maxHTMLBytes)
+		if err != nil {
+			return nil, httpx.CodeInternalError,
+				httpx.NewAppError("failed to enter BJTU academic system", err)
+		}
+		if finalURL.Host != l.aaHost {
+			return nil, httpx.CodeUnauthorized,
+				httpx.NewAppError("BJTU academic system login failed", nil)
+		}
+	}
+	return client, httpx.CodeSuccess, nil
 }
 
 // ListCourses 返回当前用户可见的本方案课程。
@@ -948,10 +959,18 @@ func getPage(
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return nil, response.Request.URL, fmt.Errorf("request returned HTTP %d", response.StatusCode)
+		return nil, response.Request.URL, &httpStatusError{StatusCode: response.StatusCode}
 	}
 	body, err := util.ReadResponseBody(response, maxBytes)
 	return body, response.Request.URL, err
+}
+
+type httpStatusError struct {
+	StatusCode int
+}
+
+func (e *httpStatusError) Error() string {
+	return fmt.Sprintf("request returned HTTP %d", e.StatusCode)
 }
 
 // solveCaptcha 使用图鉴 API 识别验证码图像，并返回识别结果。

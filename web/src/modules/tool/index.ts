@@ -4,9 +4,14 @@ export {
   listCourses,
   listCourseGrabTasks,
   loginCourseRegistration,
+  listClassrooms,
   setCourseGrabTaskStatus,
 } from './api/tools'
 export type {
+  ClassroomListParams,
+  ClassroomListResult,
+  ClassroomOccupationType,
+  ClassroomRoom,
   CourseGrabItemResult,
   CourseGrabRequest,
   CourseGrabResult,

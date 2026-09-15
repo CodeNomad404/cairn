@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -71,6 +72,33 @@ func ParsePagination(r *http.Request) (Pagination, error) {
 		return Pagination{}, err
 	}
 	return Pagination{Page: page, PageSize: pageSize}, nil
+}
+
+// ParseQueryInt 解析带默认值和闭区间范围限制的整数 Query 参数。
+func ParseQueryInt(r *http.Request, name string, defaultValue, minValue, maxValue int) (int, error) {
+	return queryInt(r, name, defaultValue, minValue, maxValue)
+}
+
+// ParseQueryString 返回去除首尾空白的可选 Query 参数，并限制其长度。
+func ParseQueryString(r *http.Request, name string, maxLength int) (string, error) {
+	value := strings.TrimSpace(r.URL.Query().Get(name))
+	if len(value) > maxLength {
+		return "", NewAppError("参数错误", nil)
+	}
+	return value, nil
+}
+
+// ParseQueryDate 解析 YYYY-MM-DD Query 参数；缺省时返回 defaultValue 的日期。
+func ParseQueryDate(r *http.Request, name string, defaultValue time.Time) (time.Time, error) {
+	raw := strings.TrimSpace(r.URL.Query().Get(name))
+	if raw == "" {
+		return defaultValue, nil
+	}
+	value, err := time.ParseInLocation(time.DateOnly, raw, defaultValue.Location())
+	if err != nil {
+		return time.Time{}, NewAppError("参数错误", err)
+	}
+	return value, nil
 }
 
 func queryInt(r *http.Request, name string, defaultValue, minValue, maxValue int) (int, error) {

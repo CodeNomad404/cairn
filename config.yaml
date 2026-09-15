@@ -11,3 +11,7 @@ database:
   password: ${DB_PASSWORD}
   name: cairn
   sslmode: disable
+
+classroom_sync:
+  # 设为已保存 BJTU 凭据的 Cairn 用户 ID；0 表示关闭每日同步。
+  user_id: 4

@@ -9,9 +9,10 @@ import (
 )
 
 type Config struct {
-	Environment string         `mapstructure:"environment"`
-	Server      ServerConfig   `mapstructure:"server"`
-	Database    DatabaseConfig `mapstructure:"database"`
+	Environment   string              `mapstructure:"environment"`
+	Server        ServerConfig        `mapstructure:"server"`
+	Database      DatabaseConfig      `mapstructure:"database"`
+	ClassroomSync ClassroomSyncConfig `mapstructure:"classroom_sync"`
 }
 
 type ServerConfig struct {
@@ -26,6 +27,10 @@ type DatabaseConfig struct {
 	Password string `mapstructure:"password"`
 	Name     string `mapstructure:"name"`
 	SSLMode  string `mapstructure:"sslmode"`
+}
+
+type ClassroomSyncConfig struct {
+	UserID int64 `mapstructure:"user_id"`
 }
 
 func (d DatabaseConfig) DSN() string {
@@ -73,6 +78,9 @@ func Load() (*Config, error) {
 	if cfg.Environment != "development" && cfg.Environment != "production" {
 		return nil, fmt.Errorf("environment must be development or production")
 	}
+	if cfg.ClassroomSync.UserID < 0 {
+		return nil, fmt.Errorf("classroom_sync.user_id must not be negative")
+	}
 
 	return &cfg, nil
 }
@@ -105,5 +113,10 @@ func applyEnvironmentOverrides(cfg *Config) {
 	}
 	if value := os.Getenv("CAIRN_DATABASE_SSLMODE"); value != "" {
 		cfg.Database.SSLMode = value
+	}
+	if value := os.Getenv("CAIRN_CLASSROOM_SYNC_USER_ID"); value != "" {
+		if userID, err := strconv.ParseInt(value, 10, 64); err == nil {
+			cfg.ClassroomSync.UserID = userID
+		}
 	}
 }

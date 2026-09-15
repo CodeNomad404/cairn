@@ -157,6 +157,22 @@ paths:
         '400': { description: Invalid task ID or status }
         '401': { description: Cairn login required }
         '404': { description: Task not found }
+  /tool/classroom/list:
+    get:
+      summary: List free BJTU classrooms, synchronizing today's snapshot on a cache miss
+      parameters:
+        - { name: date, in: query, schema: { type: string, format: date } }
+        - { name: period, in: query, schema: { type: integer, minimum: 1, maximum: 7 } }
+        - { name: building_id, in: query, schema: { type: string, maxLength: 16 } }
+        - { name: min_capacity, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        '200':
+          description: Classroom occupation records and snapshot time
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClassroomListResult' }
+        '400': { description: Invalid query parameters }
+        '401': { $ref: '#/components/responses/Unauthorized' }
 components:
   schemas:
     Credentials:
@@ -207,6 +223,25 @@ components:
       required: [status]
       properties:
         status: { type: string, enum: [grabbing, paused] }
+    ClassroomListResult:
+      type: object
+      required: [date, rooms]
+      properties:
+        date: { type: string, format: date }
+        period: { type: integer, minimum: 1, maximum: 7 }
+        synced_at: { type: string, format: date-time }
+        rooms:
+          type: array
+          items:
+            type: object
+            required: [period, building_id, building_name, room_name, capacity, occupation_type]
+            properties:
+              period: { type: integer, minimum: 1, maximum: 7 }
+              building_id: { type: string }
+              building_name: { type: string }
+              room_name: { type: string }
+              capacity: { type: integer }
+              occupation_type: { type: string, enum: [free, scheduled, rescheduled, exam, laboratory, other] }
     User:
       type: object
       properties:
