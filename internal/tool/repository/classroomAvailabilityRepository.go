@@ -51,23 +51,62 @@ func (r *classroomAvailabilityRepo) ReplaceSnapshot(
 			return fmt.Errorf("classroom snapshot contains multiple dates")
 		}
 		rows = append(rows, []any{
-			item.Date, item.Period, item.BuildingID, item.BuildingName,
+			isoWeekday(item.Date), item.Period, item.BuildingID, item.BuildingName,
 			item.RoomName, item.Capacity, item.OccupationType, item.SyncedAt,
 		})
 	}
 
-	if _, err := tx.Exec(ctx, "DELETE FROM classroom_availability"); err != nil {
+	if _, err := tx.Exec(ctx, `
+		CREATE TEMP TABLE classroom_snapshot (
+			weekday SMALLINT NOT NULL,
+			period SMALLINT NOT NULL,
+			building_id VARCHAR(16) NOT NULL,
+			building_name VARCHAR(128) NOT NULL,
+			room_name VARCHAR(128) NOT NULL,
+			capacity INTEGER NOT NULL,
+			occupation_type VARCHAR(16) NOT NULL,
+			synced_at TIMESTAMPTZ NOT NULL
+		) ON COMMIT DROP`); err != nil {
 		return err
 	}
 	if _, err := tx.CopyFrom(
 		ctx,
-		pgx.Identifier{"classroom_availability"},
+		pgx.Identifier{"classroom_snapshot"},
 		[]string{
-			"observed_date", "period", "building_id", "building_name",
+			"weekday", "period", "building_id", "building_name",
 			"room_name", "capacity", "occupation_type", "synced_at",
 		},
 		pgx.CopyFromRows(rows),
 	); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO classrooms (building_id, building_name, room_name, capacity)
+		SELECT DISTINCT ON (building_id, room_name)
+		       building_id, building_name, room_name, capacity
+		FROM classroom_snapshot
+		ORDER BY building_id, room_name, synced_at DESC
+		ON CONFLICT (building_id, room_name) DO UPDATE SET
+			building_name = EXCLUDED.building_name,
+			capacity = EXCLUDED.capacity`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO classroom_availability (
+			weekday, period, classroom_id, occupation_type, synced_at
+		)
+		SELECT snapshot.weekday,
+		       snapshot.period,
+		       classrooms.id,
+		       snapshot.occupation_type,
+		       snapshot.synced_at
+		FROM classroom_snapshot AS snapshot
+		JOIN classrooms
+		  ON classrooms.building_id = snapshot.building_id
+		 AND classrooms.room_name = snapshot.room_name
+		ON CONFLICT (weekday, period, classroom_id) DO UPDATE SET
+			occupation_type = EXCLUDED.occupation_type,
+			synced_at = EXCLUDED.synced_at`); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -79,18 +118,34 @@ func sameDate(left, right time.Time) bool {
 	return leftYear == rightYear && leftMonth == rightMonth && leftDay == rightDay
 }
 
+func isoWeekday(value time.Time) int {
+	weekday := int(value.Weekday())
+	if weekday == 0 {
+		return 7
+	}
+	return weekday
+}
+
 func (r *classroomAvailabilityRepo) List(
 	ctx context.Context,
 	query tool.ClassroomAvailabilityQuery,
 ) ([]toolmodel.ClassroomAvailability, *time.Time, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT observed_date, period, building_id, building_name, room_name,
-		       capacity, occupation_type, synced_at
-		FROM classroom_availability
-		WHERE observed_date = $1 AND ($2 = 0 OR period = $2)
-		  AND ($3 = '' OR building_id = $3) AND capacity >= $4
-		ORDER BY period, building_name, room_name`,
-		query.Date, query.Period, query.BuildingID, query.MinCapacity,
+		SELECT availability.period,
+		       classrooms.building_id,
+		       classrooms.building_name,
+		       classrooms.room_name,
+		       classrooms.capacity,
+		       availability.occupation_type,
+		       availability.synced_at
+		FROM classroom_availability AS availability
+		JOIN classrooms ON classrooms.id = availability.classroom_id
+		WHERE availability.weekday = $1
+		  AND ($2 = 0 OR availability.period = $2)
+		  AND ($3 = '' OR classrooms.building_id = $3)
+		  AND classrooms.capacity >= $4
+		ORDER BY availability.period, classrooms.building_name, classrooms.room_name`,
+		query.Weekday, query.Period, query.BuildingID, query.MinCapacity,
 	)
 	if err != nil {
 		return nil, nil, err
@@ -101,7 +156,7 @@ func (r *classroomAvailabilityRepo) List(
 	for rows.Next() {
 		var item toolmodel.ClassroomAvailability
 		if err := rows.Scan(
-			&item.Date, &item.Period, &item.BuildingID, &item.BuildingName,
+			&item.Period, &item.BuildingID, &item.BuildingName,
 			&item.RoomName, &item.Capacity, &item.OccupationType, &item.SyncedAt,
 		); err != nil {
 			return nil, nil, err
@@ -114,8 +169,8 @@ func (r *classroomAvailabilityRepo) List(
 
 	var syncedAt *time.Time
 	if err := r.db.QueryRow(ctx,
-		"SELECT MAX(synced_at) FROM classroom_availability WHERE observed_date = $1",
-		query.Date,
+		"SELECT MAX(synced_at) FROM classroom_availability WHERE weekday = $1",
+		query.Weekday,
 	).Scan(&syncedAt); err != nil {
 		return nil, nil, err
 	}

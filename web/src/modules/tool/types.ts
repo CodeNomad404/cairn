@@ -84,7 +84,6 @@ export type ClassroomOccupationType =
   | 'other'
 
 export type ClassroomListParams = {
-  date?: string
   period?: number
   building_id?: string
   min_capacity?: number

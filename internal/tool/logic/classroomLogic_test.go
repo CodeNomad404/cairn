@@ -25,7 +25,21 @@ func (f *fakeClassroomAvailabilityRepo) ReplaceSnapshot(
 	_ context.Context,
 	items []toolmodel.ClassroomAvailability,
 ) error {
-	f.items = append([]toolmodel.ClassroomAvailability(nil), items...)
+	for _, item := range items {
+		updated := false
+		for index, existing := range f.items {
+			if isoWeekday(existing.Date) == isoWeekday(item.Date) &&
+				existing.Period == item.Period && existing.BuildingID == item.BuildingID &&
+				existing.RoomName == item.RoomName {
+				f.items[index] = item
+				updated = true
+				break
+			}
+		}
+		if !updated {
+			f.items = append(f.items, item)
+		}
+	}
 	return nil
 }
 
@@ -36,11 +50,13 @@ func (f *fakeClassroomAvailabilityRepo) List(
 	items := make([]toolmodel.ClassroomAvailability, 0)
 	var syncedAt *time.Time
 	for _, item := range f.items {
-		if sameLocalDate(item.Date, query.Date) {
+		if isoWeekday(item.Date) == query.Weekday {
 			value := item.SyncedAt
-			syncedAt = &value
+			if syncedAt == nil || value.After(*syncedAt) {
+				syncedAt = &value
+			}
 		}
-		if sameLocalDate(item.Date, query.Date) && (query.Period == 0 || item.Period == query.Period) &&
+		if isoWeekday(item.Date) == query.Weekday && (query.Period == 0 || item.Period == query.Period) &&
 			item.Capacity >= query.MinCapacity &&
 			(query.BuildingID == "" || item.BuildingID == query.BuildingID) {
 			items = append(items, item)
@@ -195,8 +211,10 @@ func TestNextClassroomSyncAt(t *testing.T) {
 	}
 }
 
-func TestClassroomListSynchronizesTodayOnCacheMiss(t *testing.T) {
+func TestClassroomListRefreshesStaleWeekdayAndPreservesOtherWeekdays(t *testing.T) {
 	today := time.Now().In(classroomLocation)
+	lastWeek := today.AddDate(0, 0, -7)
+	yesterday := today.AddDate(0, 0, -1)
 	var buildingRequests atomic.Int32
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -243,7 +261,16 @@ func TestClassroomListSynchronizesTodayOnCacheMiss(t *testing.T) {
 		TujianUsername: "captcha-user", TujianPassword: "captcha-password",
 	}}
 	courseLogic := testCourseRegistrationLogic(t, server.URL, credentialsRepo)
-	classroomRepo := &fakeClassroomAvailabilityRepo{}
+	classroomRepo := &fakeClassroomAvailabilityRepo{items: []toolmodel.ClassroomAvailability{
+		{
+			Date: lastWeek, Period: 1, BuildingID: "1", BuildingName: "思源楼",
+			RoomName: "SY101", Capacity: 90, OccupationType: "scheduled", SyncedAt: lastWeek,
+		},
+		{
+			Date: yesterday, Period: 1, BuildingID: "2", BuildingName: "逸夫楼",
+			RoomName: "YF101", Capacity: 60, OccupationType: "exam", SyncedAt: yesterday,
+		},
+	}}
 	classroomLogic := NewClassroomLogic(
 		classroomRepo, courseLogic, slog.New(slog.NewTextHandler(io.Discard, nil)),
 	)
@@ -259,13 +286,21 @@ func TestClassroomListSynchronizesTodayOnCacheMiss(t *testing.T) {
 	if buildingRequests.Load() != 1 {
 		t.Fatalf("building requests = %d, want 1", buildingRequests.Load())
 	}
-	if len(classroomRepo.items) != 7 {
-		t.Fatalf("stored records = %d, want today's 7 periods", len(classroomRepo.items))
+	if len(classroomRepo.items) != 8 {
+		t.Fatalf("stored records = %d, want 7 refreshed periods and 1 other-weekday record", len(classroomRepo.items))
 	}
+	otherWeekdayPreserved := false
 	for _, item := range classroomRepo.items {
-		if !sameLocalDate(item.Date, today) {
-			t.Fatalf("stored non-today record: %#v", item)
+		if item.BuildingID == "2" && item.RoomName == "YF101" {
+			otherWeekdayPreserved = sameLocalDate(item.Date, yesterday) && item.OccupationType == "exam"
 		}
+		if item.BuildingID == "1" && item.RoomName == "SY101" && item.Period == 1 &&
+			(item.OccupationType != "free" || !sameLocalDate(item.SyncedAt, today)) {
+			t.Fatalf("same weekday was not refreshed: %#v", item)
+		}
+	}
+	if !otherWeekdayPreserved {
+		t.Fatal("synchronization removed or changed another weekday")
 	}
 
 	allPeriods, _, err := classroomLogic.List(context.Background(), 7, today, 0, "", 0)

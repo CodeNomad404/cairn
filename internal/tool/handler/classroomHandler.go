@@ -26,12 +26,7 @@ func (h *ClassroomHandler) RegisterRoutes(r chi.Router) {
 }
 
 func (h *ClassroomHandler) list(w http.ResponseWriter, r *http.Request) {
-	// 解析 date 参数，默认为当前日期，时区为 Asia/Shanghai
-	date, err := httpx.ParseQueryDate(r, "date", time.Now().In(classroomLocation))
-	if err != nil {
-		httpx.Reply(r.Context(), w, nil, httpx.CodeBadRequest, err)
-		return
-	}
+	date := time.Now().In(classroomLocation)
 	// 解析 period 参数，范围为 1-7
 	period, err := httpx.ParseQueryInt(r, "period", 0, 0, 7)
 	if err != nil {
