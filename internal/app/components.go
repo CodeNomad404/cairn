@@ -19,6 +19,7 @@ import (
 )
 
 type applicationComponents struct {
+	accountingHandler       *toolhandler.AccountingHandler
 	authLogic               *authlogic.AuthLogic
 	authHandler             *authhandler.AuthHandler
 	postHandler             *bloghandler.PostHandler
@@ -44,7 +45,9 @@ func newApplicationComponents(
 	courseRegistrationCredentialsRepo := toolrepo.NewCourseRegistrationCredentialsRepo(db)
 	courseGrabRepo := toolrepo.NewCourseGrabRepo(db)
 	classroomAvailabilityRepo := toolrepo.NewClassroomAvailabilityRepo(db)
+	accountingRepo := toolrepo.NewAccountingRepo(db)
 
+	accountingLogic := toollogic.NewAccountingLogic(accountingRepo)
 	authLogic := authlogic.NewAuthLogic(userRepo, sessionRepo)
 	postLogic := bloglogic.NewPostLogic(postRepo)
 	commentLogic := bloglogic.NewCommentLogic(postRepo, commentRepo)
@@ -57,6 +60,7 @@ func newApplicationComponents(
 	)
 
 	return &applicationComponents{
+		accountingHandler:       toolhandler.NewAccountingHandler(accountingLogic),
 		authLogic:               authLogic,
 		authHandler:             authhandler.NewAuthHandler(authLogic, cfg.IsProduction()),
 		postHandler:             bloghandler.NewPostHandler(postLogic),

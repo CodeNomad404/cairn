@@ -79,6 +79,16 @@ func ParseQueryInt(r *http.Request, name string, defaultValue, minValue, maxValu
 	return queryInt(r, name, defaultValue, minValue, maxValue)
 }
 
+// ParsePositiveInt64Query 解析一个必填的正 int64 Query 参数。
+func ParsePositiveInt64Query(r *http.Request, name string) (int64, error) {
+	raw := strings.TrimSpace(r.URL.Query().Get(name))
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || value < 1 {
+		return 0, NewAppError("参数错误", err)
+	}
+	return value, nil
+}
+
 // ParseQueryString 返回去除首尾空白的可选 Query 参数，并限制其长度。
 func ParseQueryString(r *http.Request, name string, maxLength int) (string, error) {
 	value := strings.TrimSpace(r.URL.Query().Get(name))
@@ -95,6 +105,21 @@ func ParseQueryDate(r *http.Request, name string, defaultValue time.Time) (time.
 		return defaultValue, nil
 	}
 	value, err := time.ParseInLocation(time.DateOnly, raw, defaultValue.Location())
+	if err != nil {
+		return time.Time{}, NewAppError("参数错误", err)
+	}
+	return value, nil
+}
+
+// ParseQueryMonth 解析 YYYY-MM Query 参数；缺省时返回 defaultValue 所在月份的第一天。
+func ParseQueryMonth(r *http.Request, name string, defaultValue time.Time) (time.Time, error) {
+	location := defaultValue.Location()
+	defaultMonth := time.Date(defaultValue.Year(), defaultValue.Month(), 1, 0, 0, 0, 0, location)
+	raw := strings.TrimSpace(r.URL.Query().Get(name))
+	if raw == "" {
+		return defaultMonth, nil
+	}
+	value, err := time.ParseInLocation("2006-01", raw, location)
 	if err != nil {
 		return time.Time{}, NewAppError("参数错误", err)
 	}

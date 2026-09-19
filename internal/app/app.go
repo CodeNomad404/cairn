@@ -83,6 +83,7 @@ func buildRouter(
 		components.toolHandler.RegisterRoutes(r)
 		components.courseHandler.RegisterRoutes(r)
 		components.classroomHandler.RegisterRoutes(r)
+		components.accountingHandler.RegisterRoutes(r)
 	})
 
 	return r

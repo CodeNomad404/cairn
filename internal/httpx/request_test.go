@@ -295,3 +295,44 @@ func TestParseQueryValuesRejectInvalidInput(t *testing.T) {
 		})
 	}
 }
+
+func TestParsePositiveInt64Query(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/?id=9223372036854775807", nil)
+	got, err := ParsePositiveInt64Query(r, "id")
+	if err != nil || got != int64(9223372036854775807) {
+		t.Fatalf("id = %d, err = %v", got, err)
+	}
+
+	for _, query := range []string{"", "?id=0", "?id=-1", "?id=abc"} {
+		r := httptest.NewRequest(http.MethodGet, "/"+query, nil)
+		if _, err := ParsePositiveInt64Query(r, "id"); err == nil {
+			t.Fatalf("query %q accepted", query)
+		}
+	}
+}
+
+func TestParseQueryMonth(t *testing.T) {
+	location := time.FixedZone("Asia/Shanghai", 8*60*60)
+	defaultValue := time.Date(2026, time.September, 19, 12, 0, 0, 0, location)
+
+	for _, test := range []struct {
+		query string
+		want  string
+	}{
+		{query: "", want: "2026-09-01T00:00:00+08:00"},
+		{query: "?month=2026-08", want: "2026-08-01T00:00:00+08:00"},
+	} {
+		r := httptest.NewRequest(http.MethodGet, "/"+test.query, nil)
+		got, err := ParseQueryMonth(r, "month", defaultValue)
+		if err != nil || got.Format(time.RFC3339) != test.want {
+			t.Fatalf("query %q: month = %v, err = %v", test.query, got, err)
+		}
+	}
+
+	for _, query := range []string{"?month=2026-9", "?month=2026-13", "?month=invalid"} {
+		r := httptest.NewRequest(http.MethodGet, "/"+query, nil)
+		if _, err := ParseQueryMonth(r, "month", defaultValue); err == nil {
+			t.Fatalf("query %q accepted", query)
+		}
+	}
+}

@@ -172,8 +172,259 @@ paths:
               schema: { $ref: '#/components/schemas/ClassroomListResult' }
         '400': { description: Invalid query parameters }
         '401': { $ref: '#/components/responses/Unauthorized' }
+  /tool/accounting-book/list:
+    get:
+      summary: List the current user's accounting books
+      responses:
+        '200': { description: Accounting books, content: { application/json: { schema: { $ref: '#/components/schemas/AccountingBookListResponse' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /tool/accounting-book/get:
+    get:
+      summary: Get an accounting book and its category summary
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200': { description: Accounting book, content: { application/json: { schema: { $ref: '#/components/schemas/AccountingBookDetailResponse' } } } }
+        '400': { description: Invalid book ID }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /tool/accounting-book/create:
+    post:
+      summary: Create an accounting book
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AccountingBookInput' }
+      responses:
+        '201': { description: Created accounting book, content: { application/json: { schema: { $ref: '#/components/schemas/AccountingBookResponse' } } } }
+        '400': { description: Invalid request }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /tool/accounting-book/update:
+    post:
+      summary: Update an accounting book
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - { $ref: '#/components/schemas/AccountingBookInput' }
+                - { type: object, required: [id], properties: { id: { type: integer, minimum: 1 } } }
+      responses:
+        '200': { description: Updated accounting book, content: { application/json: { schema: { $ref: '#/components/schemas/AccountingBookResponse' } } } }
+        '400': { description: Invalid request }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /tool/accounting-book/delete:
+    post:
+      summary: Delete an accounting book and all of its expenses
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [id], properties: { id: { type: integer, minimum: 1 } } }
+      responses:
+        '204': { description: Deleted accounting book and expenses }
+        '400': { description: Invalid request }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /tool/accounting-expense/list:
+    get:
+      summary: List expenses in an accounting book
+      parameters:
+        - { name: book_id, in: query, required: true, schema: { type: integer, minimum: 1 } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: page_size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200': { description: Expenses, content: { application/json: { schema: { $ref: '#/components/schemas/AccountingExpenseListResponse' } } } }
+        '400': { description: Invalid query parameters }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /tool/accounting-expense/create:
+    post:
+      summary: Create an expense in an accounting book
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AccountingExpenseCreateInput' }
+      responses:
+        '201': { description: Created expense, content: { application/json: { schema: { $ref: '#/components/schemas/AccountingExpenseResponse' } } } }
+        '400': { description: Invalid request }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /tool/accounting-expense/update:
+    post:
+      summary: Update an expense
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AccountingExpenseUpdateInput' }
+      responses:
+        '200': { description: Updated expense, content: { application/json: { schema: { $ref: '#/components/schemas/AccountingExpenseResponse' } } } }
+        '400': { description: Invalid request }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /tool/accounting-expense/delete:
+    post:
+      summary: Delete an expense
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [id], properties: { id: { type: integer, minimum: 1 } } }
+      responses:
+        '204': { description: Deleted expense }
+        '400': { description: Invalid request }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /tool/accounting-statistic/get:
+    get:
+      summary: Get monthly expense statistics by category and book
+      parameters:
+        - { name: month, in: query, description: Month in Asia/Shanghai; defaults to the current month, schema: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' } }
+      responses:
+        '200': { description: Monthly statistics, content: { application/json: { schema: { $ref: '#/components/schemas/AccountingMonthlyStatisticResponse' } } } }
+        '400': { description: Invalid month }
+        '401': { $ref: '#/components/responses/Unauthorized' }
 components:
   schemas:
+    ExpenseCategory:
+      type: integer
+      format: int32
+      enum: [1, 2, 3, 4, 5, 6, 7, 8]
+      description: 1 food, 2 transport, 3 accommodation, 4 shopping, 5 ticket, 6 entertainment, 7 medical, 8 other
+    AccountingBookInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, maxLength: 500 }
+    AccountingBook:
+      type: object
+      required: [id, name, description, created_at, updated_at]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        description: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    AccountingBookSummary:
+      allOf:
+        - { $ref: '#/components/schemas/AccountingBook' }
+        - type: object
+          required: [total_amount_cents, expense_count]
+          properties:
+            total_amount_cents: { type: integer, minimum: 0 }
+            expense_count: { type: integer, minimum: 0 }
+            last_expense_at: { type: string, format: date-time }
+    AccountingCategorySummary:
+      type: object
+      required: [category, amount_cents, expense_count]
+      properties:
+        category: { $ref: '#/components/schemas/ExpenseCategory' }
+        amount_cents: { type: integer, minimum: 0 }
+        expense_count: { type: integer, minimum: 0 }
+    AccountingBookStatistic:
+      type: object
+      required: [book_id, book_name, amount_cents, expense_count]
+      properties:
+        book_id: { type: integer }
+        book_name: { type: string }
+        amount_cents: { type: integer, minimum: 0 }
+        expense_count: { type: integer, minimum: 0 }
+    AccountingExpense:
+      type: object
+      required: [id, book_id, amount_cents, category, spent_at, note, created_at, updated_at]
+      properties:
+        id: { type: integer }
+        book_id: { type: integer }
+        amount_cents: { type: integer, minimum: 1 }
+        category: { $ref: '#/components/schemas/ExpenseCategory' }
+        spent_at: { type: string, format: date-time }
+        note: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    AccountingExpenseCreateInput:
+      type: object
+      required: [book_id, amount_cents, category, spent_at]
+      properties:
+        book_id: { type: integer, minimum: 1 }
+        amount_cents: { type: integer, minimum: 1 }
+        category: { $ref: '#/components/schemas/ExpenseCategory' }
+        spent_at: { type: string, format: date-time }
+        note: { type: string, maxLength: 200 }
+    AccountingExpenseUpdateInput:
+      type: object
+      required: [id, amount_cents, category, spent_at]
+      properties:
+        id: { type: integer, minimum: 1 }
+        amount_cents: { type: integer, minimum: 1 }
+        category: { $ref: '#/components/schemas/ExpenseCategory' }
+        spent_at: { type: string, format: date-time }
+        note: { type: string, maxLength: 200 }
+    AccountingBookResponse:
+      type: object
+      required: [code, data]
+      properties:
+        code: { type: integer }
+        data: { $ref: '#/components/schemas/AccountingBook' }
+    AccountingBookListResponse:
+      type: object
+      required: [code, data]
+      properties:
+        code: { type: integer }
+        data:
+          type: object
+          required: [items]
+          properties:
+            items: { type: array, items: { $ref: '#/components/schemas/AccountingBookSummary' } }
+    AccountingBookDetailResponse:
+      type: object
+      required: [code, data]
+      properties:
+        code: { type: integer }
+        data:
+          allOf:
+            - { $ref: '#/components/schemas/AccountingBookSummary' }
+            - type: object
+              required: [categories]
+              properties:
+                categories: { type: array, items: { $ref: '#/components/schemas/AccountingCategorySummary' } }
+    AccountingExpenseResponse:
+      type: object
+      required: [code, data]
+      properties:
+        code: { type: integer }
+        data: { $ref: '#/components/schemas/AccountingExpense' }
+    AccountingExpenseListResponse:
+      type: object
+      required: [code, data]
+      properties:
+        code: { type: integer }
+        data:
+          type: object
+          required: [items, page, page_size, has_more]
+          properties:
+            items: { type: array, items: { $ref: '#/components/schemas/AccountingExpense' } }
+            page: { type: integer }
+            page_size: { type: integer }
+            has_more: { type: boolean }
+    AccountingMonthlyStatisticResponse:
+      type: object
+      required: [code, data]
+      properties:
+        code: { type: integer }
+        data:
+          type: object
+          required: [month, total_amount_cents, by_category, by_book]
+          properties:
+            month: { type: string }
+            total_amount_cents: { type: integer, minimum: 0 }
+            by_category: { type: array, items: { $ref: '#/components/schemas/AccountingCategorySummary' } }
+            by_book: { type: array, items: { $ref: '#/components/schemas/AccountingBookStatistic' } }
     Credentials:
       type: object
       required: [username, password]
