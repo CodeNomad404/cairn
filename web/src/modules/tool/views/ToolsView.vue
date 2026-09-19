@@ -28,6 +28,10 @@ const isAdmin = computed(() => auth.user?.role === 'admin' || !auth.initialized)
           <h2>空闲教室</h2>
           <p>按教学楼、节次和占用状态查询今天的教室。</p>
         </RouterLink>
+        <RouterLink to="/tools/accounting" class="tool-card">
+          <h2>记账本</h2>
+          <p>按旅行、出差等具体事务建账，记录支出并查看月度统计。</p>
+        </RouterLink>
         <RouterLink v-if="isAdmin" to="/tools/course-registration" class="tool-card">
           <h2>教务抢课</h2>
           <p>登录教务系统看余量、一键抢课，没有余量的课程自动排队。</p>

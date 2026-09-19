@@ -10,6 +10,8 @@ import (
 
 var ErrCourseRegistrationCredentialsNotFound = errors.New("course registration credentials not found")
 var ErrCourseGrabItemNotFound = errors.New("course grab item not found")
+var ErrAccountingBookNotFound = errors.New("accounting book not found")
+var ErrAccountingExpenseNotFound = errors.New("accounting expense not found")
 
 type CourseRegistrationCredentialsRepo interface {
 	GetByUserID(ctx context.Context, userID int64) (*toolmodel.CourseRegistrationCredentials, error)
@@ -41,4 +43,20 @@ type ClassroomAvailabilityRepo interface {
 	ReplaceSnapshot(ctx context.Context, items []toolmodel.ClassroomAvailability) error
 	List(ctx context.Context, query ClassroomAvailabilityQuery) ([]toolmodel.ClassroomAvailability, *time.Time, error)
 	LastSyncedAt(ctx context.Context) (*time.Time, error)
+}
+
+type AccountingRepo interface {
+	CreateBook(ctx context.Context, book *toolmodel.AccountingBook) error
+	GetBook(ctx context.Context, userID, bookID int64) (*toolmodel.AccountingBookSummary, error)
+	ListBooks(ctx context.Context, userID int64) ([]toolmodel.AccountingBookSummary, error)
+	UpdateBook(ctx context.Context, book *toolmodel.AccountingBook) error
+	DeleteBook(ctx context.Context, userID, bookID int64) error
+	ListBookCategoryStatistics(ctx context.Context, userID, bookID int64) ([]toolmodel.AccountingCategoryStatistic, error)
+
+	CreateExpense(ctx context.Context, userID int64, expense *toolmodel.AccountingExpense) error
+	ListExpenses(ctx context.Context, userID, bookID int64, limit, offset int) ([]toolmodel.AccountingExpense, error)
+	UpdateExpense(ctx context.Context, userID int64, expense *toolmodel.AccountingExpense) error
+	DeleteExpense(ctx context.Context, userID, expenseID int64) error
+
+	GetMonthlyStatistics(ctx context.Context, userID int64, start, end time.Time) (toolmodel.AccountingMonthlyStatistics, error)
 }

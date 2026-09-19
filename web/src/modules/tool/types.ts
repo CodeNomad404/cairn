@@ -104,3 +104,73 @@ export type ClassroomListResult = {
   synced_at?: string
   rooms: ClassroomRoom[]
 }
+
+export type AccountingExpenseCategory = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+
+export type AccountingBook = {
+  id: number
+  name: string
+  description: string
+  created_at: string
+  updated_at: string
+}
+
+export type AccountingBookSummary = AccountingBook & {
+  total_amount_cents: number
+  expense_count: number
+  last_expense_at?: string
+}
+
+export type AccountingCategoryStatistic = {
+  category: AccountingExpenseCategory
+  amount_cents: number
+  expense_count: number
+}
+
+export type AccountingBookDetail = AccountingBookSummary & {
+  categories: AccountingCategoryStatistic[]
+}
+
+export type AccountingBookInput = {
+  name: string
+  description: string
+}
+
+export type AccountingExpense = {
+  id: number
+  book_id: number
+  amount_cents: number
+  category: AccountingExpenseCategory
+  spent_at: string
+  note: string
+  created_at: string
+  updated_at: string
+}
+
+export type AccountingExpenseInput = {
+  amount_cents: number
+  category: AccountingExpenseCategory
+  spent_at: string
+  note: string
+}
+
+export type AccountingExpenseListResult = {
+  items: AccountingExpense[]
+  page: number
+  page_size: number
+  has_more: boolean
+}
+
+export type AccountingBookStatistic = {
+  book_id: number
+  book_name: string
+  amount_cents: number
+  expense_count: number
+}
+
+export type AccountingMonthlyStatistic = {
+  month: string
+  total_amount_cents: number
+  by_category: AccountingCategoryStatistic[]
+  by_book: AccountingBookStatistic[]
+}

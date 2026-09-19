@@ -63,6 +63,18 @@ const routes: RouteRecordRaw[] = [
         meta: { requiresAuth: true },
       },
       {
+        path: 'tools/accounting',
+        name: 'accounting-tool',
+        component: () => import('../../modules/tool/views/AccountingView.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
+        path: 'tools/accounting/statistics',
+        name: 'accounting-statistics',
+        component: () => import('../../modules/tool/views/AccountingStatisticsView.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
         path: ':pathMatch(.*)*',
         name: 'not-found',
         component: () => import('../../modules/blog/views/NotFoundView.vue'),
