@@ -39,9 +39,11 @@ export function deleteAccountingBook(id: number) {
   })
 }
 
-export function listAccountingExpenses(bookID: number, page = 1, pageSize = 20) {
+export function listAccountingExpenses(bookID: number, page = 1, pageSize = 20, category = 0) {
+  const params: Record<string, number> = { book_id: bookID, page, page_size: pageSize }
+  if (category > 0) params.category = category
   return request<AccountingExpenseListResult>('/api/v1/tool/accounting-expense/list', {
-    params: { book_id: bookID, page, page_size: pageSize },
+    params,
   })
 }
 

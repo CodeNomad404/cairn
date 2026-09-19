@@ -54,7 +54,7 @@ type AccountingRepo interface {
 	ListBookCategoryStatistics(ctx context.Context, userID, bookID int64) ([]toolmodel.AccountingCategoryStatistic, error)
 
 	CreateExpense(ctx context.Context, userID int64, expense *toolmodel.AccountingExpense) error
-	ListExpenses(ctx context.Context, userID, bookID int64, limit, offset int) ([]toolmodel.AccountingExpense, error)
+	ListExpenses(ctx context.Context, userID, bookID int64, category toolmodel.AccountingExpenseCategory, limit, offset int) ([]toolmodel.AccountingExpense, error)
 	UpdateExpense(ctx context.Context, userID int64, expense *toolmodel.AccountingExpense) error
 	DeleteExpense(ctx context.Context, userID, expenseID int64) error
 

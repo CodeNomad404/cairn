@@ -13,7 +13,7 @@ import (
 
 type fakeAccountingRepo struct {
 	getBook              func(context.Context, int64, int64) (*toolmodel.AccountingBookSummary, error)
-	listExpenses         func(context.Context, int64, int64, int, int) ([]toolmodel.AccountingExpense, error)
+	listExpenses         func(context.Context, int64, int64, toolmodel.AccountingExpenseCategory, int, int) ([]toolmodel.AccountingExpense, error)
 	getMonthlyStatistics func(context.Context, int64, time.Time, time.Time) (toolmodel.AccountingMonthlyStatistics, error)
 }
 
@@ -58,10 +58,11 @@ func (f *fakeAccountingRepo) CreateExpense(context.Context, int64, *toolmodel.Ac
 func (f *fakeAccountingRepo) ListExpenses(
 	ctx context.Context,
 	userID, bookID int64,
+	category toolmodel.AccountingExpenseCategory,
 	limit, offset int,
 ) ([]toolmodel.AccountingExpense, error) {
 	if f.listExpenses != nil {
-		return f.listExpenses(ctx, userID, bookID, limit, offset)
+		return f.listExpenses(ctx, userID, bookID, category, limit, offset)
 	}
 	return nil, nil
 }
@@ -91,18 +92,50 @@ func TestListExpensesRejectsAnotherUsersBook(t *testing.T) {
 		getBook: func(context.Context, int64, int64) (*toolmodel.AccountingBookSummary, error) {
 			return nil, tool.ErrAccountingBookNotFound
 		},
-		listExpenses: func(context.Context, int64, int64, int, int) ([]toolmodel.AccountingExpense, error) {
+		listExpenses: func(context.Context, int64, int64, toolmodel.AccountingExpenseCategory, int, int) ([]toolmodel.AccountingExpense, error) {
 			listCalled = true
 			return nil, nil
 		},
 	}
 
-	_, code, err := NewAccountingLogic(repo).ListExpenses(context.Background(), 7, 9, 1, 20)
+	_, code, err := NewAccountingLogic(repo).ListExpenses(context.Background(), 7, 9, 0, 1, 20)
 	if code != httpx.CodeNotFound || err == nil || !errors.Is(err, tool.ErrAccountingBookNotFound) {
 		t.Fatalf("code = %d, err = %v", code, err)
 	}
 	if listCalled {
 		t.Fatal("expenses queried after book ownership check failed")
+	}
+}
+
+func TestListExpensesPassesCategoryToRepository(t *testing.T) {
+	repo := &fakeAccountingRepo{
+		listExpenses: func(
+			_ context.Context,
+			userID, bookID int64,
+			category toolmodel.AccountingExpenseCategory,
+			limit, offset int,
+		) ([]toolmodel.AccountingExpense, error) {
+			if userID != 7 || bookID != 9 {
+				t.Fatalf("user ID = %d, book ID = %d", userID, bookID)
+			}
+			if category != toolmodel.AccountingExpenseCategoryFood {
+				t.Fatalf("category = %d", category)
+			}
+			if limit != 21 || offset != 20 {
+				t.Fatalf("limit = %d, offset = %d", limit, offset)
+			}
+			return nil, nil
+		},
+	}
+
+	result, code, err := NewAccountingLogic(repo).ListExpenses(
+		context.Background(), 7, 9, toolmodel.AccountingExpenseCategoryFood, 2, 20,
+	)
+	if err != nil || code != httpx.CodeSuccess {
+		t.Fatalf("code = %d, err = %v", code, err)
+	}
+	if result.Page != 2 || result.PageSize != 20 || result.HasMore {
+		t.Fatalf("result = %+v", result)
 	}
 }
 

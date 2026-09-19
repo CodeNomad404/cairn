@@ -134,9 +134,15 @@ func (h *AccountingHandler) listExpenses(w http.ResponseWriter, r *http.Request)
 		httpx.Reply(r.Context(), w, nil, httpx.CodeBadRequest, err)
 		return
 	}
+	category, err := httpx.ParseQueryInt(r, "category", 0, 0, 8)
+	if err != nil {
+		httpx.Reply(r.Context(), w, nil, httpx.CodeBadRequest, err)
+		return
+	}
 	principal := authmid.GetPrincipal(r.Context())
 	data, code, err := h.logic.ListExpenses(
-		r.Context(), principal.ID, bookID, pagination.Page, pagination.PageSize,
+		r.Context(), principal.ID, bookID, toolmodel.AccountingExpenseCategory(category),
+		pagination.Page, pagination.PageSize,
 	)
 	httpx.Reply(r.Context(), w, data, code, err)
 }

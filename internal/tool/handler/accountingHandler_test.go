@@ -49,6 +49,22 @@ func TestCreateAccountingExpenseRejectsInvalidCategory(t *testing.T) {
 	}
 }
 
+func TestListAccountingExpensesRejectsInvalidCategory(t *testing.T) {
+	router := accountingRouter(NewAccountingHandler(nil))
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/tool/accounting-expense/list?book_id=1&category=9",
+		nil,
+	)
+	request = request.WithContext(authmid.WithPrincipal(request.Context(), &auth.Principal{ID: 1}))
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusBadRequest)
+	}
+}
+
 func TestMonthlyStatisticRejectsInvalidMonth(t *testing.T) {
 	router := accountingRouter(NewAccountingHandler(nil))
 	request := httptest.NewRequest(http.MethodGet, "/tool/accounting-statistic/get?month=2026-13", nil)
