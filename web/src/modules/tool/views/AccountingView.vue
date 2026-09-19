@@ -35,6 +35,7 @@ const books = ref<AccountingBookSummary[]>([])
 const selectedBookID = ref<number | null>(null)
 const bookDetail = ref<AccountingBookDetail | null>(null)
 const expenses = ref<AccountingExpense[]>([])
+const selectedCategory = ref<0 | AccountingExpenseCategory>(0)
 const page = ref(1)
 const hasMore = ref(false)
 const booksLoading = ref(true)
@@ -51,7 +52,7 @@ const editingExpenseID = ref<number | null>(null)
 const showExpenseForm = ref(false)
 const expenseForm = reactive({
   amount: '',
-  category: 1 as AccountingExpenseCategory,
+  category: 8 as AccountingExpenseCategory,
   spentAt: localDateTimeValue(),
   note: '',
 })
@@ -82,6 +83,10 @@ function formatExpenseTime(value: string): string {
 
 function categoryLabel(category: AccountingExpenseCategory): string {
   return categoryMap.get(category)?.label ?? '其他'
+}
+
+function filterExpenses() {
+  if (selectedBookID.value) void loadBook(selectedBookID.value, 1)
 }
 
 function friendlyError(reason: unknown, fallback: string): string {
@@ -129,7 +134,7 @@ async function loadBook(bookID: number, nextPage = 1) {
   try {
     const [detail, expenseList] = await Promise.all([
       getAccountingBook(bookID),
-      listAccountingExpenses(bookID, nextPage),
+      listAccountingExpenses(bookID, nextPage, 20, selectedCategory.value),
     ])
     if (selectedBookID.value !== bookID) return
     bookDetail.value = detail
@@ -201,7 +206,7 @@ async function removeBook() {
 function resetExpenseForm() {
   editingExpenseID.value = null
   expenseForm.amount = ''
-  expenseForm.category = 1
+  expenseForm.category = 8
   expenseForm.spentAt = localDateTimeValue()
   expenseForm.note = ''
   expenseFormError.value = ''
@@ -354,7 +359,15 @@ onMounted(() => void loadBooks())
                   <span id="expense-list-title">支出明细</span>
                   <small>第 {{ page }} 页</small>
                 </div>
-                <button class="add-expense-button" type="button" @click="openCreateExpense">＋ 新增支出</button>
+                <div class="expense-toolbar">
+                  <select v-model.number="selectedCategory" aria-label="按分类筛选" @change="filterExpenses">
+                    <option :value="0">全部分类</option>
+                    <option v-for="category in categories" :key="category.id" :value="category.id">
+                      {{ category.label }}
+                    </option>
+                  </select>
+                  <button class="add-expense-button" type="button" @click="openCreateExpense">＋ 新增支出</button>
+                </div>
               </div>
               <div v-if="detailLoading" class="accounting-loading"><span class="spinner" /></div>
               <div v-else-if="expenses.length" class="expense-list">
@@ -524,6 +537,8 @@ button, input, textarea { font: inherit; }
 .editor-actions > button:first-child { border: 0; background: transparent; color: var(--faded); cursor: pointer; }
 .expense-section { margin-top: 1.3rem; }
 .expense-section .panel-title { padding-inline: 0; }
+.expense-toolbar { display: flex; align-items: center; gap: .5rem; }
+.expense-toolbar select { border: 1px solid var(--binding); border-radius: 3px; padding: .45rem .6rem; background: var(--paper); color: var(--ink); font: inherit; font-size: .75rem; cursor: pointer; }
 .add-expense-button { border: 0; border-radius: 3px; padding: .5rem .8rem; background: var(--ink); color: var(--paper); cursor: pointer; font-size: .75rem; }
 .add-expense-button:hover { background: var(--pine); }
 .expense-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: .8rem; align-items: center; padding: .75rem 0; border-bottom: 1px solid var(--rule); }
@@ -571,6 +586,8 @@ button, input, textarea { font: inherit; }
   .book-overview > div { padding-inline: .6rem; }
   .book-overview strong { font-size: 1rem; }
   .expense-item { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .expense-section .panel-title { align-items: start; flex-direction: column; }
+  .expense-toolbar { width: 100%; justify-content: space-between; }
   .expense-actions { grid-column: 2 / -1; justify-content: flex-end; margin-top: -.5rem; }
 }
 </style>

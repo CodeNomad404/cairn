@@ -192,16 +192,17 @@ func (l *AccountingLogic) CreateExpense(
 func (l *AccountingLogic) ListExpenses(
 	ctx context.Context,
 	userID, bookID int64,
+	category toolmodel.AccountingExpenseCategory,
 	page, pageSize int,
 ) (ExpenseListResult, httpx.Code, error) {
-	if bookID < 1 || page < 1 || pageSize < 1 || pageSize > 100 {
+	if bookID < 1 || (category != 0 && !category.Valid()) || page < 1 || pageSize < 1 || pageSize > 100 {
 		return ExpenseListResult{}, httpx.CodeBadRequest, httpx.NewAppError("invalid expense list parameters", nil)
 	}
 	if _, err := l.repo.GetBook(ctx, userID, bookID); err != nil {
 		code, appErr := bookError("failed to load accounting book", err)
 		return ExpenseListResult{}, code, appErr
 	}
-	expenses, err := l.repo.ListExpenses(ctx, userID, bookID, pageSize+1, (page-1)*pageSize)
+	expenses, err := l.repo.ListExpenses(ctx, userID, bookID, category, pageSize+1, (page-1)*pageSize)
 	if err != nil {
 		return ExpenseListResult{}, httpx.CodeInternalError, httpx.NewAppError("failed to load expenses", err)
 	}

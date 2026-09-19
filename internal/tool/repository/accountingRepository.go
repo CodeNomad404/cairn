@@ -163,6 +163,7 @@ func (r *AccountingRepository) CreateExpense(
 func (r *AccountingRepository) ListExpenses(
 	ctx context.Context,
 	userID, bookID int64,
+	category toolmodel.AccountingExpenseCategory,
 	limit, offset int,
 ) ([]toolmodel.AccountingExpense, error) {
 	rows, err := r.db.Query(ctx, `
@@ -170,10 +171,10 @@ func (r *AccountingRepository) ListExpenses(
 		       e.created_at, e.updated_at
 		FROM accounting_expenses AS e
 		JOIN accounting_books AS b ON b.id = e.book_id
-		WHERE b.user_id = $1 AND b.id = $2
+		WHERE b.user_id = $1 AND b.id = $2 AND ($3 = 0 OR e.category = $3)
 		ORDER BY e.spent_at DESC, e.id DESC
-		LIMIT $3 OFFSET $4
-	`, userID, bookID, limit, offset)
+		LIMIT $4 OFFSET $5
+	`, userID, bookID, category, limit, offset)
 	if err != nil {
 		return nil, err
 	}
