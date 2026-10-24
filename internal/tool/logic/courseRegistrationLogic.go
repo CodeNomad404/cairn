@@ -855,7 +855,10 @@ func encryptSSOPassword(encodedPublicKey, password string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("decode SM2 public key: %w", err)
 	}
-	publicKey, err := sm2.NewPublicKey(append([]byte{4}, publicKeyBytes...))
+	if len(publicKeyBytes) == 64 {
+		publicKeyBytes = append([]byte{4}, publicKeyBytes...)
+	}
+	publicKey, err := sm2.NewPublicKey(publicKeyBytes)
 	if err != nil {
 		return "", fmt.Errorf("parse SM2 public key: %w", err)
 	}

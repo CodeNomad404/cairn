@@ -414,7 +414,11 @@ func testSSOKey(t *testing.T) (*sm2.PrivateKey, string) {
 		t.Fatal(err)
 	}
 	publicKey := append(
-		privateKey.X.FillBytes(make([]byte, 32)),
+		[]byte{4},
+		privateKey.X.FillBytes(make([]byte, 32))...,
+	)
+	publicKey = append(
+		publicKey,
 		privateKey.Y.FillBytes(make([]byte, 32))...,
 	)
 	return privateKey, base64.StdEncoding.EncodeToString(publicKey)
