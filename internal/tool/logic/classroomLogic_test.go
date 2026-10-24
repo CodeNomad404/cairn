@@ -216,6 +216,7 @@ func TestClassroomListRefreshesStaleWeekdayAndPreservesOtherWeekdays(t *testing.
 	lastWeek := today.AddDate(0, 0, -7)
 	yesterday := today.AddDate(0, 0, -1)
 	_, encodedPublicKey := testSSOKey(t)
+	escapedPublicKey := strings.ReplaceAll(encodedPublicKey, "/", `\/`)
 	var buildingRequests atomic.Int32
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -231,7 +232,7 @@ func TestClassroomListRefreshesStaleWeekdayAndPreservesOtherWeekdays(t *testing.
 				<input name="loginType" value="username_password"><input name="flowId" value="flow-id">
 				<input name="client_id" value="mis-client"><input name="redirect_uri" value="/auth/ncallback/">
 				<input name="response_type" value="code">
-			</form><script>var ssoConfig = {"sm2":{"enabled":true,"publicKey":"` + encodedPublicKey + `"}};</script>`))
+			</form><script>var ssoConfig = {"sm2":{"enabled":true,"publicKey":"` + escapedPublicKey + `"}};</script>`))
 		case "/sso/login":
 			http.SetCookie(w, &http.Cookie{Name: "session", Value: "ok", Path: "/"})
 			http.Redirect(w, r, server.URL+"/auth/ncallback/?code=oauth-code", http.StatusFound)

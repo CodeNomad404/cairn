@@ -829,7 +829,10 @@ func parseSSOLoginForm(r io.Reader) (ssoLoginForm, error) {
 		}
 		match := ssoPublicKeyPattern.FindStringSubmatch(node.FirstChild.Data)
 		if len(match) == 2 {
-			form.publicKey = match[1]
+			var publicKey string
+			if err := json.Unmarshal([]byte(`"`+match[1]+`"`), &publicKey); err == nil {
+				form.publicKey = publicKey
+			}
 		}
 	})
 

@@ -50,6 +50,7 @@ func (f *fakeCourseRegistrationCredentialsRepo) Upsert(
 
 func TestCourseRegistrationLogin(t *testing.T) {
 	privateKey, encodedPublicKey := testSSOKey(t)
+	escapedPublicKey := strings.ReplaceAll(encodedPublicKey, "/", `\/`)
 
 	var ssoSubmitted atomic.Bool
 	var courseSelected atomic.Bool
@@ -79,7 +80,7 @@ func TestCourseRegistrationLogin(t *testing.T) {
 <input type="hidden" name="response_type" value="code">
 <input type="hidden" name="state" value="state-value">
 </form>
-<script>var ssoConfig = {"sm2":{"enabled":true,"publicKey":"` + encodedPublicKey + `"}};</script>
+<script>var ssoConfig = {"sm2":{"enabled":true,"publicKey":"` + escapedPublicKey + `"}};</script>
 </body></html>`))
 		case "/sso/login":
 			if err := r.ParseForm(); err != nil {
@@ -365,6 +366,20 @@ func TestParseSSOLoginForm_RequiresStableFields(t *testing.T) {
 	_, err := parseSSOLoginForm(strings.NewReader(`<form id="loginForm"><input name="flowId" value="flow"></form>`))
 	if err == nil {
 		t.Fatal("parseSSOLoginForm error = nil")
+	}
+}
+
+func TestParseSSOLoginForm_UnescapesJSONPublicKey(t *testing.T) {
+	form, err := parseSSOLoginForm(strings.NewReader(`<form id="loginForm" action="/sso/login">
+<input name="loginType" value="username_password"><input name="flowId" value="flow-id">
+<input name="client_id" value="mis-client"><input name="redirect_uri" value="/callback">
+<input name="response_type" value="code"></form>
+<script>var ssoConfig = {"sm2":{"enabled":true,"publicKey":"\/w=="}};</script>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if form.publicKey != "/w==" {
+		t.Fatalf("public key = %q, want %q", form.publicKey, "/w==")
 	}
 }
 
