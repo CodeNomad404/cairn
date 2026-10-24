@@ -25,6 +25,8 @@ const defaultAAClassroomURL = "https://aa.bjtu.edu.cn/classroom/timeholdresult/r
 
 const classroomRequestInterval = 50 * time.Millisecond
 
+const classroomSyncHour = 3
+
 var (
 	classroomDatePattern  = regexp.MustCompile(`(\d{1,2})月(\d{1,2})日`)
 	classroomRoomPattern  = regexp.MustCompile(`^(.+?)\s*\((\d+|-)\)$`)
@@ -124,16 +126,16 @@ func (l *ClassroomLogic) StartScheduler(ctx context.Context, userID int64) {
 }
 
 func (l *ClassroomLogic) runScheduler(ctx context.Context, userID int64) {
-	// 在应用启动时，如果当前时间在 1 点之后且当天尚未同步，则立即执行一次同步。
+	// 在应用启动时，如果当前时间在 3 点之后且当天尚未同步，则立即执行一次同步。
 	now := time.Now().In(classroomLocation)
 	lastSyncedAt, err := l.repo.LastSyncedAt(ctx)
 	if err != nil {
 		l.logger.ErrorContext(ctx, "read classroom synchronization status", "error", err)
-	} else if now.Hour() >= 1 && (lastSyncedAt == nil || !sameLocalDate(*lastSyncedAt, now)) {
+	} else if now.Hour() >= classroomSyncHour && (lastSyncedAt == nil || !sameLocalDate(*lastSyncedAt, now)) {
 		l.synchronizeAndLog(ctx, userID)
 	}
 
-	// 每天 1 点执行一次同步。
+	// 每天 3 点执行一次同步。
 	for {
 		now = time.Now().In(classroomLocation)
 		next := nextClassroomSyncAt(now)
@@ -150,7 +152,7 @@ func (l *ClassroomLogic) runScheduler(ctx context.Context, userID int64) {
 
 func nextClassroomSyncAt(now time.Time) time.Time {
 	now = now.In(classroomLocation)
-	next := time.Date(now.Year(), now.Month(), now.Day(), 1, 0, 0, 0, classroomLocation)
+	next := time.Date(now.Year(), now.Month(), now.Day(), classroomSyncHour, 0, 0, 0, classroomLocation)
 	if !next.After(now) {
 		next = next.AddDate(0, 0, 1)
 	}

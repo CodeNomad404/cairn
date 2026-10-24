@@ -224,7 +224,7 @@ onBeforeUnmount(() => {
         <div>
           <span class="classroom-eyebrow">今日教室</span>
           <h1>找一间空教室</h1>
-          <p class="desc">数据来自教务系统，每天同步一次；首次查询可能需要稍等片刻。</p>
+          <p class="desc">数据来自教务系统，每天03:00同步一次</p>
         </div>
         <button class="classroom-refresh" type="button" :disabled="loading" @click="loadClassrooms">
           {{ loading ? '载入中…' : '刷新列表' }}
