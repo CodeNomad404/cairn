@@ -92,7 +92,7 @@ const WORKER_STATUS_LABEL: Record<string, string> = {
 
 const MESSAGE_MAP: Record<string, string> = {
   'login required': '请先登录 Cairn',
-  'BJTU login failed': '北交大账号、密码或验证码被拒绝，请检查后重试',
+  'BJTU login failed': '北交大账号或密码被拒绝，或登录需要额外验证，请检查后重试',
   'captcha recognition failed': '验证码识别失败，请检查图鉴账号是否可用',
   'saved course registration credentials not found': '尚未保存过教务凭据，请填写下方信息登录',
   'BJTU login session not found': '尚未登录教务系统',

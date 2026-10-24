@@ -12,7 +12,7 @@ const isAdmin = computed(() => auth.user?.role === 'admin' || !auth.initialized)
       <section class="tools-intro">
         <span class="eyebrow">工具站</span>
         <h1>在线小工具</h1>
-        <p class="lede">一些随手写的轻量工具，不用就忘了。</p>
+        <p class="lede">一些随手写的轻量工具</p>
       </section>
 
       <div class="tool-list">

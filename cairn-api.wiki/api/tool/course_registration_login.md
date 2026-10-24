@@ -6,7 +6,7 @@
 POST /api/v1/tools/course-registration/login
 ```
 
-需要先登录 Cairn。首次调用时，后端使用用户提交的教务系统凭据和图鉴凭据完成一次 CAS 登录；登录成功后保存凭据，并在内存中保存该 Cairn 用户对应的 MIS Cookie 会话。后续调用可以提交空对象，使用已保存的凭据重新登录。
+需要先登录 Cairn。首次调用时，后端进入北交大 SSO OAuth 登录页，使用页面动态下发的 SM2 公钥加密统一身份认证密码，再经 MIS 回调建立 Cookie 会话。登录成功后保存凭据，并在内存中保存该 Cairn 用户对应的 MIS Cookie 会话。后续调用可以提交空对象，使用已保存的凭据重新登录。
 
 ## 请求参数
 
@@ -14,8 +14,8 @@ POST /api/v1/tools/course-registration/login
 |---|---|---|---|---|---|---|
 | `student_id` | Body | `string` | 否 | 已保存值 | 尚未保存凭据时必填；北交大统一身份认证账号 | `24280000` |
 | `password` | Body | `string` | 否 | 已保存值 | 尚未保存凭据时必填；北交大统一身份认证密码 | `<bjtu-password>` |
-| `tujian_username` | Body | `string` | 否 | 已保存值 | 尚未保存凭据时必填；图鉴账号 | `example-user` |
-| `tujian_password` | Body | `string` | 否 | 已保存值 | 尚未保存凭据时必填；图鉴密码 | `<tujian-password>` |
+| `tujian_username` | Body | `string` | 否 | 已保存值 | 尚未保存凭据时必填；选课验证码使用的图鉴账号 | `example-user` |
+| `tujian_password` | Body | `string` | 否 | 已保存值 | 尚未保存凭据时必填；选课验证码使用的图鉴密码 | `<tujian-password>` |
 
 ## 请求示例
 
@@ -28,7 +28,7 @@ POST /api/v1/tools/course-registration/login
 }
 ```
 
-四项参数必须同时提交或同时省略。首次登录成功后，当前开发版本会将凭据明文保存到数据库；该临时方案必须在功能稳定后迁移为加密存储。CAS 登录失败时不会保存或覆盖凭据。
+四项参数必须同时提交或同时省略。图鉴凭据不参与 SSO 登录，仅供后续提交选课验证码使用。首次登录成功后，当前开发版本会将凭据明文保存到数据库；该临时方案必须在功能稳定后迁移为加密存储。SSO 登录失败时不会保存或覆盖凭据。
 
 已有保存凭据时的请求示例：
 
@@ -64,7 +64,7 @@ HTTP `401 Unauthorized`
 }
 ```
 
-北交大账号、密码、验证码被 CAS 拒绝：
+北交大账号或密码被 SSO 拒绝，或 SSO 要求当前实现尚未支持的额外验证：
 
 HTTP `401 Unauthorized`
 
@@ -72,17 +72,6 @@ HTTP `401 Unauthorized`
 {
   "code": 401,
   "message": "BJTU login failed"
-}
-```
-
-图鉴账号不可用或验证码识别失败：
-
-HTTP `422 Unprocessable Entity`
-
-```json
-{
-  "code": 422,
-  "message": "captcha recognition failed"
 }
 ```
 

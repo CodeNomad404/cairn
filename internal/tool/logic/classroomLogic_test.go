@@ -215,6 +215,7 @@ func TestClassroomListRefreshesStaleWeekdayAndPreservesOtherWeekdays(t *testing.
 	today := time.Now().In(classroomLocation)
 	lastWeek := today.AddDate(0, 0, -7)
 	yesterday := today.AddDate(0, 0, -1)
+	_, encodedPublicKey := testSSOKey(t)
 	var buildingRequests atomic.Int32
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -224,21 +225,18 @@ func TestClassroomListRefreshesStaleWeekdayAndPreservesOtherWeekdays(t *testing.
 				_, _ = w.Write([]byte("home"))
 				return
 			}
-			http.Redirect(w, r, server.URL+"/auth/login/", http.StatusFound)
-		case "/auth/login/":
-			if r.Method == http.MethodGet {
-				_, _ = w.Write([]byte(`<form id="login" method="post">
-					<input name="next" value="/home/"><input name="csrfmiddlewaretoken" value="csrf">
-					<img class="captcha" src="/image/token/"><input name="captcha_0" value="token">
-				</form>`))
-				return
-			}
+			http.Redirect(w, r, server.URL+"/o/authorize/", http.StatusFound)
+		case "/o/authorize/":
+			_, _ = w.Write([]byte(`<form id="loginForm" method="post" action="/sso/login">
+				<input name="loginType" value="username_password"><input name="flowId" value="flow-id">
+				<input name="client_id" value="mis-client"><input name="redirect_uri" value="/auth/ncallback/">
+				<input name="response_type" value="code">
+			</form><script>var ssoConfig = {"sm2":{"enabled":true,"publicKey":"` + encodedPublicKey + `"}};</script>`))
+		case "/sso/login":
 			http.SetCookie(w, &http.Cookie{Name: "session", Value: "ok", Path: "/"})
+			http.Redirect(w, r, server.URL+"/auth/ncallback/?code=oauth-code", http.StatusFound)
+		case "/auth/ncallback/":
 			http.Redirect(w, r, server.URL+"/home/", http.StatusFound)
-		case "/image/token/":
-			_, _ = w.Write([]byte("captcha"))
-		case "/predict":
-			_, _ = w.Write([]byte(`{"success":true,"data":{"result":"50"}}`))
 		case "/module/module/10/":
 			_, _ = w.Write([]byte(`<a href="/academic-entry/">教务系统</a>`))
 		case "/academic-entry/":

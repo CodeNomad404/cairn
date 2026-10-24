@@ -3,6 +3,7 @@ package logic
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -17,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/emmansun/gmsm/sm2"
 	"golang.org/x/net/html"
 
 	"cairn.cn/internal/httpx"
@@ -32,13 +34,16 @@ const (
 	defaultAASelectSubmitURL    = "https://aa.bjtu.edu.cn/course_selection/courseselecttask/selects_action/?action=submit"
 	defaultAACaptchaRefreshURL  = "https://aa.bjtu.edu.cn/captcha/refresh/"
 	defaultAACaptchaImageBase   = "https://aa.bjtu.edu.cn/captcha/image/"
-	defaultCASHost              = "cas.bjtu.edu.cn"
+	defaultSSOHost              = "sso.bjtu.edu.cn"
 	defaultAAHost               = "aa.bjtu.edu.cn"
 	defaultTujianURL            = "https://api.ttshitu.com/predict"
 	defaultCoursePollInterval   = 2 * time.Second
+	browserUserAgent            = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36"
 	maxHTMLBytes                = 1 << 20
 	maxCaptchaBytes             = 2 << 20
 )
+
+var ssoPublicKeyPattern = regexp.MustCompile(`"sm2"\s*:\s*\{[^{}]*"publicKey"\s*:\s*"([^"]+)"`)
 
 // CourseRegistrationLogic 负责登录北京交通大学统一身份认证，并按 Cairn 用户保存会话。
 type CourseRegistrationLogic struct {
@@ -53,7 +58,7 @@ type CourseRegistrationLogic struct {
 	aaSelectSubmitURL    string
 	aaCaptchaRefreshURL  string
 	aaCaptchaImageBase   string
-	casHost              string
+	ssoHost              string
 	aaHost               string
 	tujianURL            string
 	requestTimeout       time.Duration
@@ -84,7 +89,7 @@ func NewCourseRegistrationLogic(
 		aaSelectSubmitURL:    defaultAASelectSubmitURL,
 		aaCaptchaRefreshURL:  defaultAACaptchaRefreshURL,
 		aaCaptchaImageBase:   defaultAACaptchaImageBase,
-		casHost:              defaultCASHost,
+		ssoHost:              defaultSSOHost,
 		aaHost:               defaultAAHost,
 		tujianURL:            defaultTujianURL,
 		requestTimeout:       25 * time.Second,
@@ -700,55 +705,43 @@ func (l *CourseRegistrationLogic) Login(
 		}
 	}
 
-	// 2. 创建独立的 Cookie 会话，用于贯穿 MIS、CAS 和后续教务请求。
+	// 2. 创建独立的 Cookie 会话，用于贯穿 MIS、SSO 和后续教务请求。
 	client, err := util.NewCookieClient(l.requestTimeout)
 	if err != nil {
 		return CourseRegistrationLoginResult{}, httpx.CodeInternalError,
 			httpx.NewAppError("failed to initialize BJTU login session", err)
 	}
 
-	// 3. 从 MIS 进入 CAS，读取登录表单中的动态字段和验证码地址。
+	// 3. 从 MIS 进入 SSO，读取 OAuth 登录表单的动态字段和 SM2 公钥。
 	loginPage, err := l.openLoginPage(ctx, client)
 	if err != nil {
 		return CourseRegistrationLoginResult{}, httpx.CodeInternalError,
 			httpx.NewAppError("BJTU login service unavailable", err)
 	}
-	defer loginPage.Body.Close()
+	defer func() { _ = loginPage.Body.Close() }()
 
-	form, err := parseCASLoginForm(io.LimitReader(loginPage.Body, maxHTMLBytes))
+	form, err := parseSSOLoginForm(io.LimitReader(loginPage.Body, maxHTMLBytes))
 	if err != nil {
 		return CourseRegistrationLoginResult{}, httpx.CodeInternalError, httpx.NewAppError("BJTU login page changed", err)
 	}
 
-	loginURL, err := resolveCASURL(loginPage.Request.URL, form.action, l.casHost)
+	loginURL, err := resolveSSOURL(loginPage.Request.URL, form.action, l.ssoHost)
 	if err != nil {
 		return CourseRegistrationLoginResult{}, httpx.CodeInternalError, httpx.NewAppError("BJTU login page changed", err)
 	}
-	captchaURL, err := resolveCASURL(loginPage.Request.URL, form.captchaPath, l.casHost)
+	encryptedPassword, err := encryptSSOPassword(form.publicKey, credentials.BJTUPassword)
 	if err != nil {
 		return CourseRegistrationLoginResult{}, httpx.CodeInternalError, httpx.NewAppError("BJTU login page changed", err)
 	}
 
-	// 4. 下载验证码并交给图鉴识别。
-	captcha, err := fetchBytes(ctx, client, captchaURL.String(), maxCaptchaBytes)
-	if err != nil {
-		return CourseRegistrationLoginResult{}, httpx.CodeInternalError, httpx.NewAppError("failed to fetch BJTU captcha", err)
-	}
-	captchaAnswer, err := l.solveCaptcha(ctx, credentials.TujianUsername, credentials.TujianPassword, 11, captcha)
-	if err != nil {
-		l.logger.WarnContext(ctx, "course registration captcha recognition failed", "error", err)
-		return CourseRegistrationLoginResult{}, httpx.CodeValidationFailed, httpx.NewAppError("captcha recognition failed", err)
-	}
-
-	// 5. 提交 CAS 登录表单；重定向回 MIS 首页即登录成功。
-	form.values.Set("loginname", credentials.StudentID)
-	form.values.Set("password", credentials.BJTUPassword)
-	form.values.Set("captcha_1", captchaAnswer)
-	response, err := postCASLogin(ctx, client, loginURL, loginPage.Request.URL, form.values)
+	// 4. 提交 SSO 登录表单；经 OAuth 回调重定向回 MIS 首页即登录成功。
+	form.values.Set("username", credentials.StudentID)
+	form.values.Set("password", encryptedPassword)
+	response, err := postSSOLogin(ctx, client, loginURL, loginPage.Request.URL, form.values)
 	if err != nil {
 		return CourseRegistrationLoginResult{}, httpx.CodeInternalError, httpx.NewAppError("BJTU login service unavailable", err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 
 	if !samePage(response.Request.URL, l.misHomeURL) {
 		return CourseRegistrationLoginResult{}, httpx.CodeUnauthorized, httpx.NewAppError("BJTU login failed", nil)
@@ -787,64 +780,90 @@ func (l *CourseRegistrationLogic) openLoginPage(ctx context.Context, client *htt
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "Cairn/1.0")
+	req.Header.Set("User-Agent", browserUserAgent)
 	response, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	if response.StatusCode != http.StatusOK {
-		response.Body.Close()
+		_ = response.Body.Close()
 		return nil, fmt.Errorf("login page returned HTTP %d", response.StatusCode)
 	}
-	if response.Request.URL.Host != l.casHost {
-		response.Body.Close()
+	if response.Request.URL.Host != l.ssoHost {
+		_ = response.Body.Close()
 		return nil, fmt.Errorf("unexpected login host %q", response.Request.URL.Host)
 	}
 	return response, nil
 }
 
-type casLoginForm struct {
-	action      string
-	captchaPath string
-	values      url.Values
+type ssoLoginForm struct {
+	action    string
+	publicKey string
+	values    url.Values
 }
 
-func parseCASLoginForm(r io.Reader) (casLoginForm, error) {
+func parseSSOLoginForm(r io.Reader) (ssoLoginForm, error) {
 	document, err := html.Parse(r)
 	if err != nil {
-		return casLoginForm{}, err
+		return ssoLoginForm{}, err
 	}
 
-	formNode := findElement(document, "form", "id", "login")
+	formNode := findElement(document, "form", "id", "loginForm")
 	if formNode == nil {
-		return casLoginForm{}, fmt.Errorf("login form not found")
+		return ssoLoginForm{}, fmt.Errorf("login form not found")
 	}
 
-	form := casLoginForm{values: make(url.Values)}
+	form := ssoLoginForm{values: make(url.Values)}
 	form.action = attribute(formNode, "action")
 	walkElements(formNode, func(node *html.Node) {
-		switch node.Data {
-		case "input":
+		if node.Data == "input" {
 			name := attribute(node, "name")
 			if name != "" {
 				form.values.Set(name, attribute(node, "value"))
 			}
-		case "img":
-			if hasClass(node, "captcha") {
-				form.captchaPath = attribute(node, "src")
-			}
+		}
+	})
+	walkElements(document, func(node *html.Node) {
+		if form.publicKey != "" || node.Data != "script" || node.FirstChild == nil {
+			return
+		}
+		match := ssoPublicKeyPattern.FindStringSubmatch(node.FirstChild.Data)
+		if len(match) == 2 {
+			form.publicKey = match[1]
 		}
 	})
 
-	for _, name := range []string{"next", "csrfmiddlewaretoken", "captcha_0"} {
+	if form.action == "" {
+		return ssoLoginForm{}, fmt.Errorf("login form action not found")
+	}
+	for _, name := range []string{"loginType", "flowId", "client_id", "redirect_uri", "response_type"} {
 		if form.values.Get(name) == "" {
-			return casLoginForm{}, fmt.Errorf("login field %q not found", name)
+			return ssoLoginForm{}, fmt.Errorf("login field %q not found", name)
 		}
 	}
-	if form.captchaPath == "" {
-		return casLoginForm{}, fmt.Errorf("captcha image not found")
+	if form.publicKey == "" {
+		return ssoLoginForm{}, fmt.Errorf("SM2 public key not found")
 	}
 	return form, nil
+}
+
+func encryptSSOPassword(encodedPublicKey, password string) (string, error) {
+	publicKeyBytes, err := base64.StdEncoding.DecodeString(encodedPublicKey)
+	if err != nil {
+		return "", fmt.Errorf("decode SM2 public key: %w", err)
+	}
+	publicKey, err := sm2.NewPublicKey(append([]byte{4}, publicKeyBytes...))
+	if err != nil {
+		return "", fmt.Errorf("parse SM2 public key: %w", err)
+	}
+	ciphertext, err := sm2.Encrypt(rand.Reader, publicKey, []byte(password), nil)
+	if err != nil {
+		return "", fmt.Errorf("encrypt password: %w", err)
+	}
+	if len(ciphertext) < 2 || ciphertext[0] != 4 {
+		return "", fmt.Errorf("unexpected SM2 ciphertext")
+	}
+	return base64.StdEncoding.EncodeToString(ciphertext[1:]), nil
 }
 
 func findElement(node *html.Node, element, attributeName, attributeValue string) *html.Node {
@@ -886,13 +905,13 @@ func hasClass(node *html.Node, class string) bool {
 	return false
 }
 
-func resolveCASURL(base *url.URL, reference, expectedHost string) (*url.URL, error) {
+func resolveSSOURL(base *url.URL, reference, expectedHost string) (*url.URL, error) {
 	resolved, err := base.Parse(reference)
 	if err != nil {
 		return nil, err
 	}
 	if resolved.Host != expectedHost {
-		return nil, fmt.Errorf("unexpected CAS host %q", resolved.Host)
+		return nil, fmt.Errorf("unexpected SSO host %q", resolved.Host)
 	}
 	return resolved, nil
 }
@@ -952,7 +971,7 @@ func getPage(
 	if err != nil {
 		return nil, nil, err
 	}
-	req.Header.Set("User-Agent", "Cairn/1.0")
+	req.Header.Set("User-Agent", browserUserAgent)
 	response, err := client.Do(req)
 	if err != nil {
 		return nil, nil, err
@@ -1179,7 +1198,7 @@ func selectionSucceeded(message string) bool {
 	return strings.Contains(message, "成功") || strings.Contains(message, "已选")
 }
 
-func postCASLogin(
+func postSSOLogin(
 	ctx context.Context,
 	client *http.Client,
 	loginURL *url.URL,
@@ -1191,8 +1210,9 @@ func postCASLogin(
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Origin", loginURL.Scheme+"://"+loginURL.Host)
 	req.Header.Set("Referer", referer.String())
-	req.Header.Set("User-Agent", "Cairn/1.0")
+	req.Header.Set("User-Agent", browserUserAgent)
 	return client.Do(req)
 }
 

@@ -36,7 +36,6 @@ function coord(index: number) {
       <section class="intro">
         <span class="eyebrow">field notebook · 卷一</span>
         <h1>盖一座博客的<br>登山手账</h1>
-        <p class="lede">从空目录到 HTTPS 上线，一路把每块石头堆成路标。翻开这本，跟着走一遍。</p>
       </section>
 
       <main class="log">

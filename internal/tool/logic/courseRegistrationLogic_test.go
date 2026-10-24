@@ -2,6 +2,7 @@ package logic
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"io"
@@ -13,6 +14,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/emmansun/gmsm/sm2"
 
 	"cairn.cn/internal/httpx"
 	"cairn.cn/internal/tool"
@@ -46,48 +49,64 @@ func (f *fakeCourseRegistrationCredentialsRepo) Upsert(
 }
 
 func TestCourseRegistrationLogin(t *testing.T) {
-	var casSubmitted atomic.Bool
+	privateKey, encodedPublicKey := testSSOKey(t)
+
+	var ssoSubmitted atomic.Bool
 	var courseSelected atomic.Bool
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/home/":
+			if r.UserAgent() != browserUserAgent {
+				http.Error(w, "browser user agent required", http.StatusForbidden)
+				return
+			}
 			if cookie, err := r.Cookie("mis_session"); err == nil && cookie.Value == "logged-in" {
 				w.WriteHeader(http.StatusOK)
 				_, _ = w.Write([]byte("MIS home"))
 				return
 			}
-			http.Redirect(w, r, server.URL+"/auth/login/?next=/home/", http.StatusFound)
-		case "/auth/login/":
-			if r.Method == http.MethodGet {
-				_, _ = w.Write([]byte(`<html><body>
-<form id="login" method="post">
-<input type="hidden" name="next" value="/home/">
-<input type="hidden" name="csrfmiddlewaretoken" value="csrf-token">
-<input type="text" name="loginname">
+			http.Redirect(w, r, server.URL+"/o/authorize/", http.StatusFound)
+		case "/o/authorize/":
+			_, _ = w.Write([]byte(`<html><body>
+<form id="loginForm" method="post" action="/sso/login">
+<input type="text" name="username">
 <input type="password" name="password">
-<img class="captcha" src="/image/captcha-token/">
-<input type="hidden" name="captcha_0" value="captcha-token">
-<input type="text" name="captcha_1">
-</form></body></html>`))
-				return
-			}
+<input type="hidden" name="loginType" value="username_password">
+<input type="hidden" name="flowId" value="flow-id">
+<input type="hidden" name="client_id" value="mis-client">
+<input type="hidden" name="redirect_uri" value="/auth/ncallback/">
+<input type="hidden" name="response_type" value="code">
+<input type="hidden" name="state" value="state-value">
+</form>
+<script>var ssoConfig = {"sm2":{"enabled":true,"publicKey":"` + encodedPublicKey + `"}};</script>
+</body></html>`))
+		case "/sso/login":
 			if err := r.ParseForm(); err != nil {
 				t.Fatal(err)
 			}
-			if r.Form.Get("csrfmiddlewaretoken") != "csrf-token" ||
-				r.Form.Get("captcha_0") != "captcha-token" ||
-				r.Form.Get("captcha_1") != "50" ||
-				r.Form.Get("loginname") != "24280000" ||
-				r.Form.Get("password") != "school-password" {
-				t.Fatalf("unexpected CAS form fields: %v", r.Form)
+			if r.Header.Get("Origin") != server.URL || r.Header.Get("Referer") != server.URL+"/o/authorize/" {
+				t.Fatalf("unexpected SSO request headers")
 			}
-			casSubmitted.Store(true)
+			ciphertext, err := base64.StdEncoding.DecodeString(r.Form.Get("password"))
+			if err != nil {
+				t.Fatalf("decode encrypted password: %v", err)
+			}
+			plaintext, err := sm2.Decrypt(privateKey, append([]byte{4}, ciphertext...))
+			if err != nil {
+				t.Fatalf("decrypt password: %v", err)
+			}
+			if r.Form.Get("username") != "24280000" ||
+				r.Form.Get("loginType") != "username_password" ||
+				r.Form.Get("flowId") != "flow-id" ||
+				string(plaintext) != "school-password" {
+				t.Fatalf("unexpected SSO form fields")
+			}
+			ssoSubmitted.Store(true)
 			http.SetCookie(w, &http.Cookie{Name: "mis_session", Value: "logged-in", Path: "/"})
+			http.Redirect(w, r, server.URL+"/auth/ncallback/?code=oauth-code", http.StatusFound)
+		case "/auth/ncallback/":
 			http.Redirect(w, r, server.URL+"/home/", http.StatusFound)
-		case "/image/captcha-token/":
-			w.Header().Set("Content-Type", "image/png")
-			_, _ = w.Write([]byte("captcha-image"))
 		case "/predict":
 			var request struct {
 				Username string `json:"username"`
@@ -99,23 +118,15 @@ func TestCourseRegistrationLogin(t *testing.T) {
 				t.Fatal(err)
 			}
 			if request.Username != "tujian-user" || request.Password != "tujian-password" ||
-				(request.TypeID != 11 && request.TypeID != 16) {
+				request.TypeID != 16 {
 				t.Fatalf("unexpected Tujian request: %#v", request)
 			}
 			image, err := base64.StdEncoding.DecodeString(request.Image)
-			expectedImage := "captcha-image"
-			if request.TypeID == 16 {
-				expectedImage = "selection-captcha"
-			}
-			if err != nil || string(image) != expectedImage {
+			if err != nil || string(image) != "selection-captcha" {
 				t.Fatalf("unexpected captcha image %q, err %v", image, err)
 			}
 			w.Header().Set("Content-Type", "application/json")
-			answer := "50"
-			if request.TypeID == 16 {
-				answer = "captcha-answer"
-			}
-			_, _ = w.Write([]byte(`{"success":true,"data":{"result":"` + answer + `"}}`))
+			_, _ = w.Write([]byte(`{"success":true,"data":{"result":"captcha-answer"}}`))
 		case "/module/module/10/":
 			if _, err := r.Cookie("mis_session"); err != nil {
 				http.Error(w, "missing MIS session", http.StatusUnauthorized)
@@ -172,8 +183,8 @@ func TestCourseRegistrationLogin(t *testing.T) {
 	if !result.LoggedIn {
 		t.Fatalf("result = %#v", result)
 	}
-	if !casSubmitted.Load() {
-		t.Fatal("CAS login form was not submitted")
+	if !ssoSubmitted.Load() {
+		t.Fatal("SSO login form was not submitted")
 	}
 	l.mu.RLock()
 	_, stored := l.sessions[7]
@@ -258,21 +269,14 @@ func TestListCourses_SelectionClosed(t *testing.T) {
 	}
 }
 
-func TestCourseRegistrationLogin_TujianFailure(t *testing.T) {
+func TestCourseRegistrationLogin_LoginPageChanged(t *testing.T) {
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/home/":
-			http.Redirect(w, r, server.URL+"/auth/login/", http.StatusFound)
-		case "/auth/login/":
-			_, _ = w.Write([]byte(`<form id="login">
-<input name="next" value="/home/"><input name="csrfmiddlewaretoken" value="csrf">
-<img class="captcha" src="/image/token/"><input name="captcha_0" value="token">
-</form>`))
-		case "/image/token/":
-			_, _ = w.Write([]byte("captcha"))
-		case "/predict":
-			_, _ = w.Write([]byte(`{"success":false,"message":"bad credentials"}`))
+			http.Redirect(w, r, server.URL+"/o/authorize/", http.StatusFound)
+		case "/o/authorize/":
+			_, _ = w.Write([]byte(`<form id="loginForm"></form>`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -281,12 +285,12 @@ func TestCourseRegistrationLogin_TujianFailure(t *testing.T) {
 
 	repo := &fakeCourseRegistrationCredentialsRepo{}
 	l := testCourseRegistrationLogic(t, server.URL, repo)
-	_, code, err := l.Login(context.Background(), 7, "student", "password", "user", "bad-password")
+	_, code, err := l.Login(context.Background(), 7, "student", "password", "user", "password")
 	if err == nil {
-		t.Fatal("Login error = nil, want captcha recognition error")
+		t.Fatal("Login error = nil, want login page error")
 	}
-	if code != httpx.CodeValidationFailed {
-		t.Fatalf("code = %d, want %d", code, httpx.CodeValidationFailed)
+	if code != httpx.CodeInternalError {
+		t.Fatalf("code = %d, want %d", code, httpx.CodeInternalError)
 	}
 	if repo.upsertCount != 0 {
 		t.Fatalf("failed credentials were saved: upsert count = %d", repo.upsertCount)
@@ -357,10 +361,10 @@ func TestInspectCourseTargetRejectsAmbiguousName(t *testing.T) {
 	}
 }
 
-func TestParseCASLoginForm_RequiresStableFields(t *testing.T) {
-	_, err := parseCASLoginForm(strings.NewReader(`<form id="login"><input name="next" value="/home/"></form>`))
+func TestParseSSOLoginForm_RequiresStableFields(t *testing.T) {
+	_, err := parseSSOLoginForm(strings.NewReader(`<form id="loginForm"><input name="flowId" value="flow"></form>`))
 	if err == nil {
-		t.Fatal("parseCASLoginForm error = nil")
+		t.Fatal("parseSSOLoginForm error = nil")
 	}
 }
 
@@ -381,9 +385,22 @@ func testCourseRegistrationLogic(
 	l.aaSelectSubmitURL = serverURL + "/course_selection/courseselecttask/selects_action/?action=submit"
 	l.aaCaptchaRefreshURL = serverURL + "/captcha/refresh/"
 	l.aaCaptchaImageBase = serverURL + "/captcha/image/"
-	l.casHost = parsed.Host
+	l.ssoHost = parsed.Host
 	l.aaHost = parsed.Host
 	l.tujianURL = serverURL + "/predict"
 	l.requestTimeout = 2 * time.Second
 	return l
+}
+
+func testSSOKey(t *testing.T) (*sm2.PrivateKey, string) {
+	t.Helper()
+	privateKey, err := sm2.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicKey := append(
+		privateKey.X.FillBytes(make([]byte, 32)),
+		privateKey.Y.FillBytes(make([]byte, 32))...,
+	)
+	return privateKey, base64.StdEncoding.EncodeToString(publicKey)
 }
