@@ -31,7 +31,7 @@ services:
   backend:
     build:
       context: .
-      dockerfile: deploy/Dockerfile.dev
+      dockerfile: Dockerfile.dev
     environment:
       DB_PASSWORD: ${DB_PASSWORD:-cairn_dev}
       CAIRN_ENVIRONMENT: development

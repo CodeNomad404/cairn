@@ -48,6 +48,15 @@ func (f *fakeCourseRegistrationCredentialsRepo) Upsert(
 	return nil
 }
 
+func (f *fakeCourseRegistrationCredentialsRepo) BindMIS(ctx context.Context, c *toolmodel.CourseRegistrationCredentials) error {
+	if f.credentials != nil {
+		c.TujianUsername = f.credentials.TujianUsername
+		c.TujianPassword = f.credentials.TujianPassword
+	}
+	c.BindingVersion++
+	return f.Upsert(ctx, c)
+}
+
 func TestCourseRegistrationLogin(t *testing.T) {
 	privateKey, encodedPublicKey := testSSOKey(t)
 	escapedPublicKey := strings.ReplaceAll(encodedPublicKey, "/", `\/`)

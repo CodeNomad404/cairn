@@ -15,6 +15,7 @@ import (
 	authmid "cairn.cn/internal/auth/middleware"
 	"cairn.cn/internal/config"
 	webmw "cairn.cn/internal/middleware"
+	toolhandler "cairn.cn/internal/tool/handler"
 )
 
 type App struct {
@@ -83,6 +84,8 @@ func buildRouter(
 		components.toolHandler.RegisterRoutes(r)
 		components.courseHandler.RegisterRoutes(r)
 		components.classroomHandler.RegisterRoutes(r)
+		toolhandler.RegisterMISBind(r, components.courseRegistrationLogic)
+		components.homeworkHandler.RegisterRoutes(r)
 		components.accountingHandler.RegisterRoutes(r)
 	})
 

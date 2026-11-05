@@ -157,6 +157,82 @@ paths:
         '400': { description: Invalid task ID or status }
         '401': { description: Cairn login required }
         '404': { description: Task not found }
+  /tool/mis-account/bind:
+    post:
+      summary: Verify and bind the current user's MIS account without starting course-grab tasks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [student_id, password]
+              properties:
+                student_id: { type: string, minLength: 1, maxLength: 64 }
+                password: { type: string, minLength: 1, maxLength: 256 }
+      responses:
+        '200':
+          description: Bound account; existing Tujian configuration is preserved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: integer }
+                  data:
+                    type: object
+                    properties:
+                      bound: { type: boolean }
+                      student_id: { type: string, description: Masked student ID }
+        '400': { description: Invalid input }
+        '401': { description: Cairn login required or MIS credentials rejected }
+  /tool/course-homework/list:
+    get:
+      summary: Read the current user's cached current-term homework; never starts synchronization
+      parameters:
+        - { name: course_id, in: query, schema: { type: string, maxLength: 64 } }
+        - { name: status, in: query, schema: { type: string, enum: [todo, pending, overdue, submitted, upcoming, unknown, all], default: todo } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: page_size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200':
+          description: Snapshot, binding state, unfiltered counts and per-course synchronization results
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HomeworkListResponse' }
+        '400': { description: Invalid query }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /tool/course-homework/get:
+    get:
+      summary: Read one owned homework's plain-text details and attachment names
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200':
+          description: Details; cached content is retained if upstream details cannot be refreshed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HomeworkDetailResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /tool/course-homework/sync:
+    post:
+      summary: Synchronize the current user's current-term homework with a bounded duration
+      description: Duplicate requests for the same user share one run. Successful courses replace snapshots atomically; failures preserve old data. No user ID or upstream URL is accepted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false, maxProperties: 0 }
+      responses:
+        '200':
+          description: Synchronization result, including partial or total course failures
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HomeworkSyncResponse' }
+        '401': { description: Cairn login required or MIS authentication expired }
+        '404': { description: MIS account must be bound first }
   /tool/classroom/list:
     get:
       summary: List today's BJTU classroom occupation records, synchronizing on a stale weekday snapshot
@@ -292,6 +368,77 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
 components:
   schemas:
+    HomeworkItem:
+      type: object
+      required: [id, course_id, course_name, title, submission, status, grading]
+      properties:
+        id: { type: integer, format: int64 }
+        course_id: { type: string }
+        course_name: { type: string }
+        title: { type: string }
+        opens_at: { type: [string, 'null'], format: date-time }
+        deadline: { type: [string, 'null'], format: date-time }
+        submitted_at: { type: [string, 'null'], format: date-time }
+        submission: { type: string, description: Original upstream submission status }
+        status: { type: string, enum: [pending, overdue, submitted, upcoming, unknown] }
+        grading: { type: string }
+    HomeworkCourse:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        last_attempt_at: { type: string, format: date-time }
+        last_success_at: { type: [string, 'null'], format: date-time }
+        error: { type: string }
+    HomeworkListResponse:
+      type: object
+      properties:
+        code: { type: integer }
+        data:
+          type: object
+          properties:
+            bound: { type: boolean }
+            student_id: { type: string, description: Masked bound student ID; empty when unbound }
+            has_snapshot: { type: boolean }
+            term_code: { type: string }
+            last_success_at: { type: [string, 'null'], format: date-time }
+            courses: { type: array, items: { $ref: '#/components/schemas/HomeworkCourse' } }
+            items: { type: array, items: { $ref: '#/components/schemas/HomeworkItem' } }
+            counts:
+              type: object
+              additionalProperties: { type: integer }
+            total: { type: integer }
+            page: { type: integer }
+            page_size: { type: integer }
+    HomeworkDetailResponse:
+      type: object
+      properties:
+        code: { type: integer }
+        data:
+          type: object
+          properties:
+            item: { $ref: '#/components/schemas/HomeworkItem' }
+            content: { type: string, description: Plain text, never raw HTML }
+            attachments:
+              type: array
+              items:
+                type: object
+                properties:
+                  name: { type: string }
+            warning: { type: string, description: Upstream failure; cached content is being shown }
+    HomeworkSyncResponse:
+      type: object
+      properties:
+        code: { type: integer }
+        data:
+          type: object
+          properties:
+            status: { type: string, enum: [success, partial, failed] }
+            succeeded: { type: integer }
+            failed: { type: integer }
+            term_code: { type: string }
+            last_success_at: { type: [string, 'null'], format: date-time }
+            courses: { type: array, items: { $ref: '#/components/schemas/HomeworkCourse' } }
     ExpenseCategory:
       type: integer
       format: int32
@@ -444,6 +591,12 @@ components:
       oneOf:
         - { $ref: '#/components/schemas/CourseRegistrationCredentials' }
         - { type: object, maxProperties: 0 }
+        - type: object
+          additionalProperties: false
+          required: [tujian_username, tujian_password]
+          properties:
+            tujian_username: { type: string, minLength: 1 }
+            tujian_password: { type: string, minLength: 1, format: password }
     CourseListResult:
       type: object
       required: [selection_open, courses]
