@@ -27,6 +27,7 @@ type applicationComponents struct {
 	toolHandler             *toolhandler.Handler
 	courseHandler           *toolhandler.CourseHandler
 	classroomHandler        *toolhandler.ClassroomHandler
+	homeworkHandler         *toolhandler.HomeworkHandler
 	seoHandler              *seo.Handler
 	courseRegistrationLogic *toollogic.CourseRegistrationLogic
 	classroomLogic          *toollogic.ClassroomLogic
@@ -46,6 +47,7 @@ func newApplicationComponents(
 	courseGrabRepo := toolrepo.NewCourseGrabRepo(db)
 	classroomAvailabilityRepo := toolrepo.NewClassroomAvailabilityRepo(db)
 	accountingRepo := toolrepo.NewAccountingRepo(db)
+	homeworkRepo := toolrepo.NewHomeworkRepo(db)
 
 	accountingLogic := toollogic.NewAccountingLogic(accountingRepo)
 	authLogic := authlogic.NewAuthLogic(userRepo, sessionRepo)
@@ -58,6 +60,7 @@ func newApplicationComponents(
 	classroomLogic := toollogic.NewClassroomLogic(
 		classroomAvailabilityRepo, courseRegistrationLogic, logger,
 	)
+	homeworkLogic := toollogic.NewHomeworkLogic(homeworkRepo, courseRegistrationLogic)
 
 	return &applicationComponents{
 		accountingHandler:       toolhandler.NewAccountingHandler(accountingLogic),
@@ -68,6 +71,7 @@ func newApplicationComponents(
 		toolHandler:             toolhandler.New(jsonLogic),
 		courseHandler:           toolhandler.NewCourseHandler(courseRegistrationLogic),
 		classroomHandler:        toolhandler.NewClassroomHandler(classroomLogic),
+		homeworkHandler:         toolhandler.NewHomeworkHandler(homeworkLogic),
 		seoHandler:              seo.New(postLogic),
 		courseRegistrationLogic: courseRegistrationLogic,
 		classroomLogic:          classroomLogic,

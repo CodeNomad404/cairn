@@ -46,6 +46,9 @@ func TestCourseRegistrationLoginRequestValidate(t *testing.T) {
 	if err := (CourseRegistrationLoginRequest{}).Validate(); err != nil {
 		t.Fatalf("empty request for saved credentials rejected: %v", err)
 	}
+	if err := (CourseRegistrationLoginRequest{TujianUsername: "user", TujianPassword: "password"}).Validate(); err != nil {
+		t.Fatalf("Tujian configuration with saved MIS rejected: %v", err)
+	}
 
 	tests := []struct {
 		name   string

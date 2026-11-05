@@ -57,6 +57,12 @@ const routes: RouteRecordRaw[] = [
         meta: { requiresAdmin: true },
       },
       {
+        path: 'tools/course-homework',
+        name: 'course-homework',
+        component: () => import('../../modules/tool/views/CourseHomeworkView.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
         path: 'tools/classroom',
         name: 'classroom-tool',
         component: () => import('../../modules/tool/views/ClassroomView.vue'),

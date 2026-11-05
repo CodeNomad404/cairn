@@ -5,6 +5,7 @@ import { APIRequestError } from '../../../shared/api/http'
 import { grabCourses, listCourses, loginCourseRegistration } from '../api/tools'
 import { useCourseGrabTasks } from '../composables/useCourseGrabTasks'
 import type { CourseResult } from '../types'
+import MISBindForm from '../components/MISBindForm.vue'
 
 const authStore = useAuthStore()
 
@@ -25,15 +26,12 @@ function restoreSelection(): string[] {
 }
 
 // ---- 教务登录 ----
-const studentId = ref('')
-const password = ref('')
 const tujianUsername = ref('')
 const tujianPassword = ref('')
 const loginLoading = ref(false)
 const loginError = ref('')
 /** null = 正在探测会话；true = 已建立 BJTU 会话；false = 未登录 */
 const sessionReady = ref<boolean | null>(null)
-const showLoginForm = ref(false)
 const selectionOpen = ref<boolean | null>(null)
 
 // ---- 课程列表 ----
@@ -157,7 +155,6 @@ async function loadCourses() {
       coursesError.value = friendlyError(e)
       loginError.value = `检查教务状态失败：${friendlyError(e)}`
       sessionReady.value = false
-      showLoginForm.value = true
     }
     selectionOpen.value = null
   } finally {
@@ -170,14 +167,10 @@ async function submitLogin() {
   loginError.value = ''
   try {
     await loginCourseRegistration({
-      student_id: studentId.value,
-      password: password.value,
       tujian_username: tujianUsername.value,
       tujian_password: tujianPassword.value,
     })
     sessionReady.value = true
-    showLoginForm.value = false
-    password.value = ''
     tujianPassword.value = ''
     void loadCourses()
     void refreshTasks()
@@ -188,13 +181,18 @@ async function submitLogin() {
   }
 }
 
+function onMISBound() {
+  sessionReady.value = true
+  void loadCourses()
+  void refreshTasks()
+}
+
 async function reloginWithSaved() {
   loginLoading.value = true
   loginError.value = ''
   try {
     await loginCourseRegistration({})
     sessionReady.value = true
-    showLoginForm.value = false
     void loadCourses()
     void refreshTasks()
   } catch (e) {
@@ -291,7 +289,6 @@ async function submitGrab() {
   } catch (e) {
     if (isSessionMissing(e)) {
       sessionReady.value = false
-      showLoginForm.value = true
     }
     grabError.value = friendlyError(e)
   } finally {
@@ -315,13 +312,15 @@ onMounted(() => {
       <section class="panel" aria-labelledby="section-login">
         <h2 id="section-login">教务登录</h2>
 
+        <MISBindForm :bound="sessionReady !== false" @bound="onMISBound" />
+
         <p v-if="sessionReady === null" class="panel-hint">正在检查教务会话…</p>
 
         <template v-else-if="sessionReady">
           <p class="session-line">
             <span class="dot ok" aria-hidden="true" />已建立教务会话
-            <button type="button" class="btn ghost small" @click="showLoginForm = !showLoginForm">
-              {{ showLoginForm ? '收起' : '重新登录' }}
+            <button type="button" class="btn ghost small" :disabled="loginLoading" @click="reloginWithSaved">
+              {{ loginLoading ? '登录中…' : '重新登录教务' }}
             </button>
           </p>
         </template>
@@ -330,15 +329,8 @@ onMounted(() => {
           <p class="panel-hint">需要先登录北交大统一身份认证系统，抢课接口才能使用。</p>
         </template>
 
-        <form v-if="showLoginForm || sessionReady === false" class="login-grid" @submit.prevent="submitLogin">
-          <label>
-            学号
-            <input v-model.trim="studentId" name="student-id" autocomplete="username" required />
-          </label>
-          <label>
-            教务密码
-            <input v-model="password" type="password" name="bjtu-password" autocomplete="current-password" required />
-          </label>
+        <p class="panel-hint">图鉴仅用于抢课验证码识别，使用已绑定的 MIS 账号登录。</p>
+        <form class="login-grid" @submit.prevent="submitLogin">
           <label>
             图鉴用户名
             <input v-model.trim="tujianUsername" name="tujian-username" autocomplete="username" required />
@@ -349,7 +341,7 @@ onMounted(() => {
           </label>
           <div class="form-actions">
             <button type="submit" class="btn" :disabled="loginLoading">
-              {{ loginLoading ? '登录中…' : '登录' }}
+              {{ loginLoading ? '登录中…' : '保存图鉴配置并登录' }}
             </button>
             <button type="button" class="btn ghost" :disabled="loginLoading" @click="reloginWithSaved">
               使用已保存的凭据

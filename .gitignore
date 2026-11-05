@@ -35,5 +35,6 @@ docs/*
 !docs/后端架构整改清单.md
 !docs/文本对比接口协议.md
 !docs/BJTU教室空闲数据同步.md
+!docs/BJTU课程作业获取实践.md
 
 AGENTS.md

@@ -14,7 +14,7 @@ tasks:
   ci:
     desc: Run the same backend and frontend checks used by CI
     cmds:
-      - ./deploy/ci.sh
+      - ./scripts/ci.sh
 
   deploy:
     desc: Pull and deploy the latest master branch to production

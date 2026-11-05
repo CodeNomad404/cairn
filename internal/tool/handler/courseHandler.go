@@ -43,6 +43,10 @@ func (r CourseRegistrationLoginRequest) Validate() error {
 		strings.TrimSpace(r.TujianUsername) == "" && r.TujianPassword == "" {
 		return nil
 	}
+	if strings.TrimSpace(r.StudentID) == "" && r.Password == "" &&
+		strings.TrimSpace(r.TujianUsername) != "" && r.TujianPassword != "" {
+		return nil
+	}
 	if strings.TrimSpace(r.StudentID) == "" {
 		return errors.New("student_id is required")
 	}

@@ -1,5 +1,10 @@
 # Cairn Deployment
 
+This directory contains production deployment and backup files. Local development
+uses `docker compose up --build` and `docker compose down` from the repository root;
+its build configuration is in `Dockerfile.dev` and `.air.toml`. CI checks live in
+`scripts/ci.sh`.
+
 Production layout (the full source checkout used for builds lives separately at
 `/opt/cairn-repo`):
 
@@ -129,7 +134,7 @@ making changes while the first one holds the deployment lock.
 Run all CI checks locally with:
 
 ```bash
-./deploy/ci.sh
+./scripts/ci.sh
 # or: task ci
 ```
 
@@ -137,8 +142,8 @@ CI systems with separate Go and Node.js build environments can run the two
 halves independently:
 
 ```bash
-./deploy/ci.sh backend
-./deploy/ci.sh frontend
+./scripts/ci.sh backend
+./scripts/ci.sh frontend
 ```
 
 The backend job downloads modules, runs `go vet`, runs all Go tests, and builds

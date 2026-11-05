@@ -14,8 +14,8 @@ stages:
     golangVersion: "1.26.3"
     commands:
     - export GOPROXY=https://goproxy.cn,direct
-    - chmod +x deploy/ci.sh deploy/remote-deploy.sh
-    - ./deploy/ci.sh backend
+    - chmod +x scripts/ci.sh deploy/remote-deploy.sh
+    - ./scripts/ci.sh backend
     - rm -rf ./output
     - mkdir -p ./output
     - cp deploy/remote-deploy.sh ./output/
@@ -36,8 +36,8 @@ stages:
     displayName: 前端 CI
     nodeVersion: "22.22.0"
     commands:
-    - chmod +x deploy/ci.sh
-    - ./deploy/ci.sh frontend
+    - chmod +x scripts/ci.sh
+    - ./scripts/ci.sh frontend
     caches:
     - ~/.npm
     notify: []
