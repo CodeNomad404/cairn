@@ -12,4 +12,5 @@ type CourseRegistrationCredentials struct {
 	TujianPassword string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	BindingVersion int64
 }

@@ -698,6 +698,12 @@ func (l *CourseRegistrationLogic) Login(
 				httpx.NewAppError("failed to load course registration credentials", err)
 		}
 	}
+	// Updating only Tujian settings reuses the current user's saved MIS binding.
+	if strings.TrimSpace(tujianUsername) != "" && tujianPassword != "" {
+		credentials.TujianUsername = strings.TrimSpace(tujianUsername)
+		credentials.TujianPassword = tujianPassword
+		shouldSaveCredentials = true
+	}
 	if l.grabRepo != nil {
 		if err := l.grabRepo.RecordLoginAttempt(ctx, userID); err != nil {
 			return CourseRegistrationLoginResult{}, httpx.CodeInternalError,
@@ -705,46 +711,9 @@ func (l *CourseRegistrationLogic) Login(
 		}
 	}
 
-	// 2. 创建独立的 Cookie 会话，用于贯穿 MIS、SSO 和后续教务请求。
-	client, err := util.NewCookieClient(l.requestTimeout)
+	client, code, err := l.authenticateMIS(ctx, credentials)
 	if err != nil {
-		return CourseRegistrationLoginResult{}, httpx.CodeInternalError,
-			httpx.NewAppError("failed to initialize BJTU login session", err)
-	}
-
-	// 3. 从 MIS 进入 SSO，读取 OAuth 登录表单的动态字段和 SM2 公钥。
-	loginPage, err := l.openLoginPage(ctx, client)
-	if err != nil {
-		return CourseRegistrationLoginResult{}, httpx.CodeInternalError,
-			httpx.NewAppError("BJTU login service unavailable", err)
-	}
-	defer func() { _ = loginPage.Body.Close() }()
-
-	form, err := parseSSOLoginForm(io.LimitReader(loginPage.Body, maxHTMLBytes))
-	if err != nil {
-		return CourseRegistrationLoginResult{}, httpx.CodeInternalError, httpx.NewAppError("BJTU login page changed", err)
-	}
-
-	loginURL, err := resolveSSOURL(loginPage.Request.URL, form.action, l.ssoHost)
-	if err != nil {
-		return CourseRegistrationLoginResult{}, httpx.CodeInternalError, httpx.NewAppError("BJTU login page changed", err)
-	}
-	encryptedPassword, err := encryptSSOPassword(form.publicKey, credentials.BJTUPassword)
-	if err != nil {
-		return CourseRegistrationLoginResult{}, httpx.CodeInternalError, httpx.NewAppError("BJTU login page changed", err)
-	}
-
-	// 4. 提交 SSO 登录表单；经 OAuth 回调重定向回 MIS 首页即登录成功。
-	form.values.Set("username", credentials.StudentID)
-	form.values.Set("password", encryptedPassword)
-	response, err := postSSOLogin(ctx, client, loginURL, loginPage.Request.URL, form.values)
-	if err != nil {
-		return CourseRegistrationLoginResult{}, httpx.CodeInternalError, httpx.NewAppError("BJTU login service unavailable", err)
-	}
-	defer func() { _ = response.Body.Close() }()
-
-	if !samePage(response.Request.URL, l.misHomeURL) {
-		return CourseRegistrationLoginResult{}, httpx.CodeUnauthorized, httpx.NewAppError("BJTU login failed", nil)
+		return CourseRegistrationLoginResult{}, code, err
 	}
 	// 6. 登录成功后保存新凭据，并保留 Cookie 会话供后续功能复用。
 	if shouldSaveCredentials {
@@ -773,6 +742,52 @@ func (l *CourseRegistrationLogic) Login(
 	}
 
 	return CourseRegistrationLoginResult{LoggedIn: true}, httpx.CodeSuccess, nil
+}
+
+// authenticateMIS performs authentication without saving credentials or starting workers.
+func (l *CourseRegistrationLogic) authenticateMIS(ctx context.Context, credentials *toolmodel.CourseRegistrationCredentials) (*http.Client, httpx.Code, error) {
+	// 2. 创建独立的 Cookie 会话，用于贯穿 MIS、SSO 和后续教务请求。
+	client, err := util.NewCookieClient(l.requestTimeout)
+	if err != nil {
+		return nil, httpx.CodeInternalError,
+			httpx.NewAppError("failed to initialize BJTU login session", err)
+	}
+
+	// 3. 从 MIS 进入 SSO，读取 OAuth 登录表单的动态字段和 SM2 公钥。
+	loginPage, err := l.openLoginPage(ctx, client)
+	if err != nil {
+		return nil, httpx.CodeInternalError,
+			httpx.NewAppError("BJTU login service unavailable", err)
+	}
+	defer func() { _ = loginPage.Body.Close() }()
+
+	form, err := parseSSOLoginForm(io.LimitReader(loginPage.Body, maxHTMLBytes))
+	if err != nil {
+		return nil, httpx.CodeInternalError, httpx.NewAppError("BJTU login page changed", err)
+	}
+
+	loginURL, err := resolveSSOURL(loginPage.Request.URL, form.action, l.ssoHost)
+	if err != nil {
+		return nil, httpx.CodeInternalError, httpx.NewAppError("BJTU login page changed", err)
+	}
+	encryptedPassword, err := encryptSSOPassword(form.publicKey, credentials.BJTUPassword)
+	if err != nil {
+		return nil, httpx.CodeInternalError, httpx.NewAppError("BJTU login page changed", err)
+	}
+
+	// 4. 提交 SSO 登录表单；经 OAuth 回调重定向回 MIS 首页即登录成功。
+	form.values.Set("username", credentials.StudentID)
+	form.values.Set("password", encryptedPassword)
+	response, err := postSSOLogin(ctx, client, loginURL, loginPage.Request.URL, form.values)
+	if err != nil {
+		return nil, httpx.CodeInternalError, httpx.NewAppError("BJTU login service unavailable", err)
+	}
+	defer func() { _ = response.Body.Close() }()
+
+	if !samePage(response.Request.URL, l.misHomeURL) {
+		return nil, httpx.CodeUnauthorized, httpx.NewAppError("BJTU login failed", nil)
+	}
+	return client, httpx.CodeSuccess, nil
 }
 
 func (l *CourseRegistrationLogic) openLoginPage(ctx context.Context, client *http.Client) (*http.Response, error) {

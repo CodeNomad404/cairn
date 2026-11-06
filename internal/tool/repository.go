@@ -16,6 +16,17 @@ var ErrAccountingExpenseNotFound = errors.New("accounting expense not found")
 type CourseRegistrationCredentialsRepo interface {
 	GetByUserID(ctx context.Context, userID int64) (*toolmodel.CourseRegistrationCredentials, error)
 	Upsert(ctx context.Context, credentials *toolmodel.CourseRegistrationCredentials) error
+	BindMIS(ctx context.Context, credentials *toolmodel.CourseRegistrationCredentials) error
+}
+
+var ErrHomeworkNotFound = errors.New("homework not found")
+var ErrMISBindingChanged = errors.New("MIS binding changed during synchronization")
+
+type HomeworkRepo interface {
+	Snapshot(ctx context.Context, userID int64) (toolmodel.HomeworkSnapshot, error)
+	Get(ctx context.Context, userID, id int64) (*toolmodel.Homework, error)
+	Prepare(ctx context.Context, userID, version int64, term string, courses []toolmodel.HomeworkCourse) error
+	SaveCourse(ctx context.Context, userID, version int64, term string, course toolmodel.HomeworkCourse, items []toolmodel.Homework, syncError string) error
 }
 
 type CourseGrabRepo interface {

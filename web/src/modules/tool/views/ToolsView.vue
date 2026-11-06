@@ -28,6 +28,10 @@ const isAdmin = computed(() => auth.user?.role === 'admin' || !auth.initialized)
           <h2>空闲教室</h2>
           <p>按教学楼、节次和占用状态查询今天的教室。</p>
         </RouterLink>
+        <RouterLink to="/tools/course-homework" class="tool-card">
+          <h2>课程作业</h2>
+          <p>汇总当前学期作业，查看提交状态、截止时间和作业详情。</p>
+        </RouterLink>
         <RouterLink to="/tools/accounting" class="tool-card">
           <h2>记账本</h2>
           <p>按旅行、出差等具体事务建账，记录支出并查看月度统计。</p>
