@@ -30,4 +30,4 @@ docker compose down
 
 ## TODO
 
-- [ ] 在服务器上部署 Prowlarr 搜索 4K 片源，在电脑上运行 qBittorrent 下载和做种。通过浏览器搜索 `英文片名 年份 2160p`，将磁力链接或 `.torrent` 文件交给本机 qBittorrent。电影文件和 BT 传输都留在电脑端，节省服务器磁盘空间和带宽。
+- [ ] 服务器端只部署 Prowlarr，用于搜索 4K 片源。通过浏览器搜索 `英文片名 年份 2160p`，将磁力链接或 `.torrent` 文件交给电脑上的 qBittorrent 下载和做种。在同一台电脑上安装 PeerBanHelper，通过本机 WebUI 接入 qBittorrent，检测并封禁异常 BT 节点。电影文件和 BT 传输都留在电脑端，节省服务器磁盘空间和带宽。
