@@ -31,3 +31,4 @@ docker compose down
 ## TODO
 
 - [ ] 服务器端只部署 Prowlarr，用于搜索 4K 片源。通过浏览器搜索 `英文片名 年份 2160p`，将磁力链接或 `.torrent` 文件交给电脑上的 qBittorrent 下载和做种。在同一台电脑上安装 PeerBanHelper，通过本机 WebUI 接入 qBittorrent，检测并封禁异常 BT 节点。电影文件和 BT 传输都留在电脑端，节省服务器磁盘空间和带宽。
+- [ ] 在 Cairn 增加管理员专用的 4K 片源搜索页，页面和搜索接口均校验管理员权限。由 Cairn 后端调用 Prowlarr，支持按片名搜索和筛选 2160p。页面只显示片名、大小、做种数和来源等信息。Prowlarr API 密钥和 PT 站凭据保存在后端。
