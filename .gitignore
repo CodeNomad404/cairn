@@ -24,6 +24,9 @@ node_modules/
 
 # Temp
 tmp/
+!/tmp/
+/tmp/*
+!/tmp/gin-source-v1.12.0/
 backups/
 *.tgz
 

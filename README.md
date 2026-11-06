@@ -27,3 +27,7 @@ docker compose down
 - [Windows 本地开发环境](docs/Windows本地开发环境.md)
 - [前端架构设计](docs/前端架构设计.md)
 - [生产部署](deploy/README.md)
+
+## TODO
+
+- [ ] 在服务器上部署 Prowlarr 搜索 4K 片源，在电脑上运行 qBittorrent 下载和做种。通过浏览器搜索 `英文片名 年份 2160p`，将磁力链接或 `.torrent` 文件交给本机 qBittorrent。电影文件和 BT 传输都留在电脑端，节省服务器磁盘空间和带宽。
