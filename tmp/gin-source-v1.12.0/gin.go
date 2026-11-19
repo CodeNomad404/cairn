@@ -366,9 +366,11 @@ func (engine *Engine) addRoute(method, path string, handlers HandlersChain) {
 	assert1(method != "", "HTTP method can not be empty")
 	assert1(len(handlers) > 0, "there must be at least one handler")
 
-	debugPrintRoute(method, path, handlers)
+	debugPrintRoute(method, path, handlers) // 调试模式的输出
 
 	root := engine.trees.get(method)
+	
+	// 首次添加路由时，创建一个新的根节点，并将其添加到树中
 	if root == nil {
 		root = new(node)
 		root.fullPath = "/"

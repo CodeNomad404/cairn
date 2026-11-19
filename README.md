@@ -12,8 +12,8 @@ docker compose up --build
 
 打开：
 
-- 前端：<http://localhost:5173>
-- 后端健康检查：<http://localhost:8080/healthz>
+- 前端：[http://localhost:5173](http://localhost:5173)
+- 后端健康检查：[http://localhost:8080/healthz](http://localhost:8080/healthz)
 
 停止并保留本地数据库：
 

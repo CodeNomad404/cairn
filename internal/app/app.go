@@ -11,7 +11,6 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	authhandler "cairn.cn/internal/auth/handler"
 	authmid "cairn.cn/internal/auth/middleware"
 	"cairn.cn/internal/config"
 	webmw "cairn.cn/internal/middleware"
@@ -78,7 +77,7 @@ func buildRouter(
 	r.Get("/healthz", healthz)
 	components.seoHandler.RegisterRoutes(r)
 	r.Route("/api/v1", func(r chi.Router) {
-		r.With(webmw.RateLimit(10, time.Minute)).Mount("/auth", authRoutes(components.authHandler))
+		r.Route("/auth", components.authHandler.RegisterRoutes)
 		components.postHandler.RegisterRoutes(r)
 		components.commentHandler.RegisterRoutes(r)
 		components.toolHandler.RegisterRoutes(r)
@@ -97,10 +96,4 @@ func healthz(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`{"status":"ok","version":"dev"}`))
-}
-
-func authRoutes(h *authhandler.AuthHandler) http.Handler {
-	r := chi.NewRouter()
-	h.RegisterRoutes(r)
-	return r
 }

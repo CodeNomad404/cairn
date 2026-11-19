@@ -2,7 +2,9 @@ package repository
 
 import (
 	"context"
+	"errors"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"cairn.cn/internal/auth"
@@ -17,11 +19,24 @@ func NewUserRepo(db *pgxpool.Pool) auth.UserRepo {
 	return &userRepo{db: db}
 }
 
-func (r *userRepo) Create(ctx context.Context, u *authmodel.User) error {
-	return r.db.QueryRow(ctx,
-		`INSERT INTO users (username, password, role) VALUES ($1, $2, $3) RETURNING id, created_at`,
-		u.Username, u.Password, u.Role,
+func (r *userRepo) CreateWithSession(ctx context.Context, u *authmodel.User, s *authmodel.Session) error {
+	err := r.db.QueryRow(ctx, `
+		WITH new_user AS (
+			INSERT INTO users (username, password, role) VALUES ($1, $2, $3)
+			ON CONFLICT (username) DO NOTHING
+			RETURNING id, created_at
+		), new_session AS (
+			INSERT INTO sessions (token, user_id, expires_at)
+			SELECT $4, id, $5 FROM new_user
+			RETURNING user_id
+		)
+		SELECT id, created_at FROM new_user JOIN new_session ON user_id = id`,
+		u.Username, u.Password, u.Role, s.Token, s.ExpiresAt,
 	).Scan(&u.ID, &u.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return auth.ErrUsernameTaken
+	}
+	return err
 }
 
 func (r *userRepo) GetByUsername(ctx context.Context, username string) (*authmodel.User, error) {

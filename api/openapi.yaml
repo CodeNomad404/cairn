@@ -12,9 +12,27 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/Credentials' }
+            schema: { $ref: '#/components/schemas/RegisterInput' }
       responses:
-        '201': { description: Registered user and session cookie, content: { application/json: { schema: { $ref: '#/components/schemas/User' } } } }
+        '201':
+          description: Registered user and session cookie
+          headers:
+            Set-Cookie: { schema: { type: string } }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [code, data]
+                properties:
+                  code: { type: integer, const: 1 }
+                  data: { $ref: '#/components/schemas/User' }
+        '400': { description: Invalid registration input }
+        '422': { description: Username already registered }
+        '429':
+          description: Too many registration attempts from this IP
+          headers:
+            Retry-After: { schema: { type: integer } }
+        '500': { description: Registration could not be completed }
   /auth/login:
     post:
       summary: Login and create a session
@@ -573,6 +591,13 @@ components:
             total_amount_cents: { type: integer, minimum: 0 }
             by_category: { type: array, items: { $ref: '#/components/schemas/AccountingCategorySummary' } }
             by_book: { type: array, items: { $ref: '#/components/schemas/AccountingBookStatistic' } }
+    RegisterInput:
+      type: object
+      required: [username, password]
+      additionalProperties: false
+      properties:
+        username: { type: string, description: "2–64 Unicode code points after trimming outer whitespace, with no control characters" }
+        password: { type: string, format: password, minLength: 8, maxLength: 72, description: "At most 72 bytes in UTF-8" }
     Credentials:
       type: object
       required: [username, password]

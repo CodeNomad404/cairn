@@ -220,6 +220,13 @@ sudo systemctl is-active --quiet "${SERVICE}"
 
 trap - ERR
 
+log "Deploying PeerBanHelper"
+sudo docker compose -f deploy/pbh/compose.yaml config --quiet
+sudo docker compose -f deploy/pbh/compose.yaml up -d --wait --wait-timeout 60
+curl --fail --silent --show-error --max-time 5 --retry 15 --retry-delay 2 \
+  --retry-connrefused http://127.0.0.1:9898/ >/dev/null
+healthcheck
+
 # Keep the immediately previous release and remove older application copies.
 if ! sudo find "${REMOTE_APP_DIR}/bin" -maxdepth 1 -type f -name 'cairn.20*T*' \
   ! -name "cairn.${RELEASE_ID}" -delete; then

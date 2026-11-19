@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -18,19 +19,20 @@ import (
 )
 
 type fakeUserRepo struct {
-	user     *authmodel.User
-	missOnce bool // 首次 GetByUsername 无匹配（注册的存在性检查），之后返回用户
+	user      *authmodel.User
+	createErr error
 }
 
-func (f *fakeUserRepo) Create(_ context.Context, u *authmodel.User) error {
+func (f *fakeUserRepo) CreateWithSession(_ context.Context, u *authmodel.User, _ *authmodel.Session) error {
+	if f.createErr != nil {
+		return f.createErr
+	}
 	u.ID = 1
+	u.CreatedAt = time.Date(2026, time.July, 19, 8, 0, 0, 0, time.UTC)
+	f.user = u
 	return nil
 }
 func (f *fakeUserRepo) GetByUsername(_ context.Context, _ string) (*authmodel.User, error) {
-	if f.missOnce {
-		f.missOnce = false
-		return nil, nil
-	}
 	return f.user, nil
 }
 func (f *fakeUserRepo) GetByID(_ context.Context, _ int64) (*authmodel.User, error) {
@@ -138,17 +140,14 @@ func assertUserResultData(t *testing.T, data any, want logic.UserResult) {
 
 func TestRegisterSetsCookieAndReturnsUserResult(t *testing.T) {
 	createdAt := time.Date(2026, time.July, 19, 8, 0, 0, 0, time.UTC)
-	hash, _ := bcrypt.GenerateFromPassword([]byte("correct"), bcrypt.DefaultCost)
+	users := &fakeUserRepo{}
 	authLogic := logic.NewAuthLogic(
-		&fakeUserRepo{
-			missOnce: true,
-			user:     &authmodel.User{ID: 1, Username: "alice", Password: string(hash), Role: auth.RoleUser, CreatedAt: createdAt},
-		},
-		&fakeSessionRepo{},
+		users, nil,
 	)
 	h := NewAuthHandler(authLogic, false)
 
-	body := strings.NewReader(`{"username":"alice","password":"correct"}`)
+	password := strings.Repeat("山", 24)
+	body := strings.NewReader(`{"username":" 石堆 ","password":"` + password + `"}`)
 	r := httptest.NewRequest(http.MethodPost, "/register", body)
 	w := httptest.NewRecorder()
 
@@ -165,7 +164,39 @@ func TestRegisterSetsCookieAndReturnsUserResult(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatal(err)
 	}
-	assertUserResultData(t, resp["data"], logic.UserResult{ID: 1, Username: "alice", Role: auth.RoleUser, CreatedAt: createdAt})
+	assertUserResultData(t, resp["data"], logic.UserResult{ID: 1, Username: "石堆", Role: auth.RoleUser, CreatedAt: createdAt})
+	if err := bcrypt.CompareHashAndPassword([]byte(users.user.Password), []byte(password)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRegisterErrorsDoNotSetCookie(t *testing.T) {
+	for _, tc := range []struct {
+		name, username, password string
+		createErr                error
+		status                   int
+	}{
+		{"short username", "山", "password", nil, 400},
+		{"control character", "alice\u0000", "password", nil, 400},
+		{"short password", "alice", "山山山山山山山", nil, 400},
+		{"long password", "alice", strings.Repeat("山", 24) + "a", nil, 400},
+		{"duplicate", "alice", "password", auth.ErrUsernameTaken, 422},
+		{"write failure", "alice", "password", errors.New("database unavailable"), 500},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			users := &fakeUserRepo{createErr: tc.createErr}
+			h := NewAuthHandler(logic.NewAuthLogic(users, nil), false)
+			body, err := json.Marshal(RegisterRequest{Username: tc.username, Password: tc.password})
+			if err != nil {
+				t.Fatal(err)
+			}
+			w := httptest.NewRecorder()
+			h.register(w, httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(string(body))))
+			if w.Code != tc.status || len(w.Result().Cookies()) != 0 || users.user != nil {
+				t.Fatalf("status = %d, cookies = %v, body = %s", w.Code, w.Result().Cookies(), w.Body)
+			}
+		})
+	}
 }
 
 func TestMeReturnsUserResult(t *testing.T) {

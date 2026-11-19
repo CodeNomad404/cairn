@@ -5,6 +5,8 @@ uses `docker compose up --build` and `docker compose down` from the repository r
 its build configuration is in `Dockerfile.dev` and `.air.toml`. CI checks live in
 `scripts/ci.sh`.
 
+Optional services: [PeerBanHelper](pbh/README.md).
+
 Production layout (the full source checkout used for builds lives separately at
 `/opt/cairn-repo`):
 

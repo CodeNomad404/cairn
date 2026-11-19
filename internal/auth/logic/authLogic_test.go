@@ -16,7 +16,9 @@ type fakeUserRepo struct {
 	err  error
 }
 
-func (f *fakeUserRepo) Create(_ context.Context, _ *authmodel.User) error { return nil }
+func (f *fakeUserRepo) CreateWithSession(_ context.Context, _ *authmodel.User, _ *authmodel.Session) error {
+	return nil
+}
 func (f *fakeUserRepo) GetByUsername(_ context.Context, _ string) (*authmodel.User, error) {
 	return f.user, f.err
 }

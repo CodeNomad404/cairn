@@ -25,35 +25,28 @@ func NewAuthLogic(userRepo auth.UserRepo, sessionRepo auth.SessionRepo) *AuthLog
 	return &AuthLogic{userRepo: userRepo, sessionRepo: sessionRepo}
 }
 
-// Register 注册新用户。
-func (l *AuthLogic) Register(ctx context.Context, username, password string) (httpx.Code, error) {
-	username = strings.TrimSpace(username)
-
-	if len(username) < 2 || len(username) > 64 {
-		return httpx.CodeBadRequest, httpx.NewAppError("用户名需要 2–64 个字符", nil)
-	}
-	if len(password) < 6 {
-		return httpx.CodeBadRequest, httpx.NewAppError("密码至少 6 个字符", nil)
-	}
-
-	if existing, _ := l.userRepo.GetByUsername(ctx, username); existing != nil {
-		return httpx.CodeValidationFailed, httpx.NewAppError("用户名已被注册", nil)
-	}
-
+// Register 原子地创建新用户及其会话。
+func (l *AuthLogic) Register(ctx context.Context, username, password string) (LoginResult, httpx.Code, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return httpx.CodeInternalError, httpx.NewAppError("密码加密失败", err)
+		return LoginResult{}, httpx.CodeInternalError, httpx.NewAppError("密码加密失败", err)
 	}
-
 	u := &authmodel.User{
-		Username: username,
+		Username: strings.TrimSpace(username),
 		Password: string(hash),
 		Role:     auth.RoleUser,
 	}
-	if err := l.userRepo.Create(ctx, u); err != nil {
-		return httpx.CodeInternalError, httpx.NewAppError("创建用户失败", err)
+	session, err := newSession(0)
+	if err != nil {
+		return LoginResult{}, httpx.CodeInternalError, httpx.NewAppError("生成会话失败", err)
 	}
-	return httpx.CodeCreated, nil
+	if err := l.userRepo.CreateWithSession(ctx, u, session); err != nil {
+		if errors.Is(err, auth.ErrUsernameTaken) {
+			return LoginResult{}, httpx.CodeValidationFailed, httpx.NewAppError("用户名已被注册", nil)
+		}
+		return LoginResult{}, httpx.CodeInternalError, httpx.NewAppError("注册暂未完成，请稍后重试", err)
+	}
+	return LoginResult{Token: session.Token, User: toUserResult(u)}, httpx.CodeCreated, nil
 }
 
 // UserResult 是对外公开的用户信息。
@@ -87,23 +80,29 @@ func (l *AuthLogic) Login(ctx context.Context, username, password string) (Login
 		return LoginResult{}, httpx.CodeUnauthorized, httpx.NewAppError("用户名或密码错误", err)
 	}
 
-	tokenBytes := make([]byte, 32)
-	if _, err := rand.Read(tokenBytes); err != nil {
+	session, err := newSession(u.ID)
+	if err != nil {
 		return LoginResult{}, httpx.CodeInternalError, httpx.NewAppError("生成会话失败", err)
-	}
-	token := hex.EncodeToString(tokenBytes)
-
-	session := &authmodel.Session{
-		Token:     token,
-		UserID:    u.ID,
-		CreatedAt: time.Now(),
-		ExpiresAt: time.Now().Add(30 * 24 * time.Hour),
 	}
 	if err := l.sessionRepo.Create(ctx, session); err != nil {
 		return LoginResult{}, httpx.CodeInternalError, httpx.NewAppError("创建会话失败", err)
 	}
 
-	return LoginResult{Token: token, User: toUserResult(u)}, httpx.CodeSuccess, nil
+	return LoginResult{Token: session.Token, User: toUserResult(u)}, httpx.CodeSuccess, nil
+}
+
+func newSession(userID int64) (*authmodel.Session, error) {
+	tokenBytes := make([]byte, 32)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	return &authmodel.Session{
+		Token:     hex.EncodeToString(tokenBytes),
+		UserID:    userID,
+		CreatedAt: now,
+		ExpiresAt: now.Add(30 * 24 * time.Hour),
+	}, nil
 }
 
 // Logout 登出，删除 session.

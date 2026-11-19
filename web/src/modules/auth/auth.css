@@ -14,7 +14,7 @@
 .login-card .eyebrow { margin: 36px 0 6px; color: var(--faded); font-family: var(--hand); font-size: 1.3rem; transform: rotate(-2deg); display: inline-block; }
 .login-card h1 { margin: 0 0 10px; font-family: var(--serif); font-weight: 500; font-size: 2rem; letter-spacing: -.02em; }
 .login-card .description { margin: 0 0 28px; color: var(--faded); font-size: .95rem; }
-.login-form { display: grid; gap: 18px; }
+.login-form { display: grid; gap: 18px; min-width: 0; margin: 0; padding: 0; border: 0; }
 .login-form label { display: grid; gap: 6px; color: var(--ink); font-size: .85rem; font-family: var(--mono); letter-spacing: .06em; text-transform: uppercase; }
 .login-form input {
   width: 100%; border: 1px solid var(--binding); border-radius: 4px;
@@ -22,6 +22,9 @@
   font-family: var(--sans); font-size: 1rem;
 }
 .login-form input:focus { outline: 2px solid var(--pine); border-color: var(--pine); }
+.login-form .password-visibility { display: flex; align-items: center; gap: 8px; }
+.login-form input[type="checkbox"] { width: auto; accent-color: var(--pine); }
+.auth-hint { color: var(--faded); letter-spacing: normal; }
 .login-form button {
   border: 0; border-radius: 4px; padding: 12px;
   color: var(--paper); background: var(--ink);

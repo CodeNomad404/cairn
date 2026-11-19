@@ -93,6 +93,12 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../../modules/auth/views/LoginView.vue'),
     meta: { guestOnly: true },
   },
+  {
+    path: '/register',
+    name: 'register',
+    component: () => import('../../modules/auth/views/LoginView.vue'),
+    meta: { guestOnly: true },
+  },
 ]
 
 export const router = createRouter({

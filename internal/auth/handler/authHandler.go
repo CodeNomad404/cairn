@@ -4,6 +4,9 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 
@@ -11,6 +14,7 @@ import (
 	"cairn.cn/internal/auth/logic"
 	authmid "cairn.cn/internal/auth/middleware"
 	"cairn.cn/internal/httpx"
+	webmw "cairn.cn/internal/middleware"
 )
 
 // add
@@ -25,8 +29,8 @@ func NewAuthHandler(authLogic *logic.AuthLogic, secureCookies bool) *AuthHandler
 }
 
 func (h *AuthHandler) RegisterRoutes(r chi.Router) {
-	r.Post("/register", h.register)
-	r.Post("/login", h.login)
+	r.With(webmw.RateLimit(5, time.Minute)).Post("/register", h.register)
+	r.With(webmw.RateLimit(10, time.Minute)).Post("/login", h.login)
 	r.Post("/logout", h.logout)
 	r.With(authmid.RequireUser).Get("/me", h.me)
 }
@@ -38,11 +42,18 @@ type RegisterRequest struct {
 }
 
 func (r RegisterRequest) Validate() error {
-	if strings.TrimSpace(r.Username) == "" {
-		return errors.New("username is required")
+	username := strings.TrimSpace(r.Username)
+	if length := utf8.RuneCountInString(username); length < 2 || length > 64 {
+		return errors.New("用户名需要 2–64 个字符")
 	}
-	if r.Password == "" {
-		return errors.New("password is required")
+	if strings.ContainsFunc(r.Username, unicode.IsControl) {
+		return errors.New("用户名不能包含控制字符")
+	}
+	if utf8.RuneCountInString(r.Password) < 8 {
+		return errors.New("密码至少需要 8 个字符")
+	}
+	if len(r.Password) > 72 {
+		return errors.New("密码不能超过 72 字节，请缩短密码")
 	}
 	return nil
 }
@@ -53,17 +64,12 @@ func (h *AuthHandler) register(w http.ResponseWriter, r *http.Request) {
 		httpx.Reply(r.Context(), w, nil, httpx.CodeBadRequest, err)
 		return
 	}
-	code, err := h.authLogic.Register(r.Context(), req.Username, req.Password)
+	result, code, err := h.authLogic.Register(r.Context(), req.Username, req.Password)
 	if err != nil {
 		httpx.Reply(r.Context(), w, nil, code, err)
 		return
 	}
 
-	result, loginCode, err := h.authLogic.Login(r.Context(), req.Username, req.Password)
-	if err != nil {
-		httpx.Reply(r.Context(), w, nil, loginCode, err)
-		return
-	}
 	h.setSessionCookie(w, result.Token)
 	httpx.Reply(r.Context(), w, result.User, code, nil)
 }

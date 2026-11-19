@@ -131,7 +131,7 @@ func (n *node) incrementChildPrio(pos int) int {
 }
 
 // addRoute adds a node with the given handle to the path.
-// Not concurrency-safe!
+// Not concurrency-safe! 不是并发安全的
 func (n *node) addRoute(path string, handlers HandlersChain) {
 	fullPath := path
 	n.priority++
