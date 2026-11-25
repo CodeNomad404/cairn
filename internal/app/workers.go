@@ -15,6 +15,9 @@ func startBackgroundWorkers(
 	if err := components.courseRegistrationLogic.StartWorkers(ctx); err != nil {
 		return fmt.Errorf("start course grab workers: %w", err)
 	}
+	if err := components.transferLogic.StartCleanup(ctx); err != nil {
+		return fmt.Errorf("start transfer cleanup: %w", err)
+	}
 	components.classroomLogic.StartScheduler(ctx, cfg.ClassroomSync.UserID)
 	return nil
 }

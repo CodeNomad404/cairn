@@ -35,12 +35,14 @@ services:
     environment:
       DB_PASSWORD: ${DB_PASSWORD:-cairn_dev}
       CAIRN_ENVIRONMENT: development
+      CAIRN_TRANSFER_DIRECTORY: /var/lib/cairn/transfer
       CAIRN_SERVER_HOST: 0.0.0.0
       CAIRN_DATABASE_HOST: db
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
       - .:/app
+      - transfer-data:/var/lib/cairn/transfer
       - go-mod-cache:/go/pkg/mod
       - go-build-cache:/root/.cache/go-build
     depends_on:
@@ -69,6 +71,7 @@ services:
         condition: service_healthy
 
 volumes:
+  transfer-data:
   pgdata:
   go-mod-cache:
   go-build-cache:

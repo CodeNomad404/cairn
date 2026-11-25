@@ -36,6 +36,10 @@ const isAdmin = computed(() => auth.user?.role === 'admin' || !auth.initialized)
           <h2>记账本</h2>
           <p>按旅行、出差等具体事务建账，记录支出并查看月度统计。</p>
         </RouterLink>
+        <RouterLink v-if="auth.user?.role === 'admin'" to="/tools/transfer" class="tool-card">
+          <h2>传输通道</h2>
+          <p>同账号跨电脑传递文件与纯文本，内容保存 15 天。</p>
+        </RouterLink>
         <RouterLink v-if="isAdmin" to="/tools/course-registration" class="tool-card">
           <h2>教务抢课</h2>
           <p>登录教务系统看余量、一键抢课，没有余量的课程自动排队。</p>

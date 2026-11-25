@@ -183,3 +183,8 @@ HTTP 请求
 - 新业务不得新增 REST 风格路径。已有接口保持兼容，只在明确的接口迁移任务中按业务模块逐步修改，不得在无关改动中顺手迁移。
 - 接口变更遵循契约先行：先更新 `api/openapi.yaml`，并在同一变更中同步后端路由、前端调用和接口文档。
 - 完整规则和迁移示例见 `docs/API接口命名规范.md`。
+
+### 文件传输接口例外
+
+- `/api/v1/tool/transfer/upload` 使用 multipart/form-data，channel_id 必须在 file 前，且 file 为最后一个字段；通用流式解析由 httpx 负责。
+- `/api/v1/tool/transfer/download` 成功时返回附件文件流，输出前的错误继续使用 httpx.Reply。其余 JSON 接口规则不变。

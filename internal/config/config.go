@@ -9,10 +9,15 @@ import (
 )
 
 type Config struct {
+	Transfer      TransferConfig      `mapstructure:"transfer"`
 	Environment   string              `mapstructure:"environment"`
 	Server        ServerConfig        `mapstructure:"server"`
 	Database      DatabaseConfig      `mapstructure:"database"`
 	ClassroomSync ClassroomSyncConfig `mapstructure:"classroom_sync"`
+}
+
+type TransferConfig struct {
+	Directory string `mapstructure:"directory"`
 }
 
 type ServerConfig struct {
@@ -45,6 +50,7 @@ func (c Config) IsProduction() bool {
 }
 
 func Load() (*Config, error) {
+	viper.SetDefault("transfer.directory", "data/transfer")
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath(".")
@@ -86,6 +92,9 @@ func Load() (*Config, error) {
 }
 
 func applyEnvironmentOverrides(cfg *Config) {
+	if value := os.Getenv("CAIRN_TRANSFER_DIRECTORY"); value != "" {
+		cfg.Transfer.Directory = value
+	}
 	if value := os.Getenv("CAIRN_ENVIRONMENT"); value != "" {
 		cfg.Environment = value
 	}

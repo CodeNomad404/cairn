@@ -26,6 +26,7 @@ docker compose down
 - [开发协作规范](docs/开发协作规范.md)
 - [Windows 本地开发环境](docs/Windows本地开发环境.md)
 - [前端架构设计](docs/前端架构设计.md)
+- [传输通道设计与使用](docs/传输通道设计与使用.md)：管理员同账号传文件与文本，内容保留 15 天，不设总容量上限。
 - [生产部署](deploy/README.md)
 
 ## TODO

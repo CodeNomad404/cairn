@@ -71,3 +71,30 @@ type AccountingRepo interface {
 
 	GetMonthlyStatistics(ctx context.Context, userID int64, start, end time.Time) (toolmodel.AccountingMonthlyStatistics, error)
 }
+
+const (
+	TransferFileLimit     int64 = 100 << 20
+	TransferTextLimit           = 100 << 10
+	TransferRetentionDays       = 15
+)
+
+var (
+	ErrTransferNotFound  = errors.New("transfer resource not found")
+	ErrTransferDuplicate = errors.New("transfer channel name already exists")
+)
+
+type TransferRepo interface {
+	CreateChannel(ctx context.Context, userID int64, name string) (*toolmodel.TransferChannel, error)
+	ListChannels(ctx context.Context, userID int64) ([]toolmodel.TransferChannel, error)
+	RenameChannel(ctx context.Context, userID, id int64, name string) (*toolmodel.TransferChannel, error)
+	DeleteChannel(ctx context.Context, userID, id int64) error
+	CreateItem(ctx context.Context, userID int64, item *toolmodel.TransferItem) error
+	Activate(ctx context.Context, id, size int64) error
+	Abandon(ctx context.Context, id int64) error
+	ListItems(ctx context.Context, userID, channelID int64, kind string, page, pageSize int) ([]toolmodel.TransferItem, error)
+	GetItem(ctx context.Context, userID, id int64) (*toolmodel.TransferItem, error)
+	DeleteItem(ctx context.Context, userID, id int64) error
+	Usage(ctx context.Context, userID int64) (int64, error)
+	CleanupItems(ctx context.Context) ([]toolmodel.TransferItem, error)
+	Purge(ctx context.Context, id int64) error
+}

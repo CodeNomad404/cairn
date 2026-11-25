@@ -19,6 +19,8 @@ import (
 )
 
 type applicationComponents struct {
+	transferHandler         *toolhandler.TransferHandler
+	transferLogic           *toollogic.TransferLogic
 	accountingHandler       *toolhandler.AccountingHandler
 	authLogic               *authlogic.AuthLogic
 	authHandler             *authhandler.AuthHandler
@@ -46,6 +48,8 @@ func newApplicationComponents(
 	courseRegistrationCredentialsRepo := toolrepo.NewCourseRegistrationCredentialsRepo(db)
 	courseGrabRepo := toolrepo.NewCourseGrabRepo(db)
 	classroomAvailabilityRepo := toolrepo.NewClassroomAvailabilityRepo(db)
+	transferRepo := toolrepo.NewTransferRepo(db)
+	transferLogic := toollogic.NewTransferLogic(transferRepo, cfg.Transfer.Directory, logger)
 	accountingRepo := toolrepo.NewAccountingRepo(db)
 	homeworkRepo := toolrepo.NewHomeworkRepo(db)
 
@@ -63,6 +67,8 @@ func newApplicationComponents(
 	homeworkLogic := toollogic.NewHomeworkLogic(homeworkRepo, courseRegistrationLogic)
 
 	return &applicationComponents{
+		transferHandler:         toolhandler.NewTransferHandler(transferLogic),
+		transferLogic:           transferLogic,
 		accountingHandler:       toolhandler.NewAccountingHandler(accountingLogic),
 		authLogic:               authLogic,
 		authHandler:             authhandler.NewAuthHandler(authLogic, cfg.IsProduction()),

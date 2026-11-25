@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -69,7 +68,7 @@ func buildRouter(
 	r.Use(webmw.TrustedProxyRealIP())
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(30 * time.Second))
+	r.Use(webmw.RequestTimeout)
 	r.Use(webmw.SecurityHeaders(cfg.IsProduction()))
 	r.Use(webmw.SameOrigin())
 	r.Use(authmid.LoadUser(components.authLogic))
@@ -86,6 +85,7 @@ func buildRouter(
 		toolhandler.RegisterMISBind(r, components.courseRegistrationLogic)
 		components.homeworkHandler.RegisterRoutes(r)
 		components.accountingHandler.RegisterRoutes(r)
+		components.transferHandler.RegisterRoutes(r)
 	})
 
 	return r

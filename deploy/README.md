@@ -133,6 +133,17 @@ making changes while the first one holds the deployment lock.
 
 ## Continuous integration
 
+The admin transfer tool stores uploaded files outside the public frontend tree.
+Set `CAIRN_TRANSFER_DIRECTORY=/opt/cairn/data/transfer` in `/etc/cairn/cairn.env`
+and ensure the `cairn` service user can write there. The default relative path
+`data/transfer` also resolves inside `/opt/cairn` with the supplied systemd unit.
+Deployments must preserve this directory. Back it up together with PostgreSQL;
+the deployment script's database backup does not include uploaded files.
+Files and text expire after 15 days; channels persist. There is no aggregate
+storage quota. Monitor actual free disk space. File requests permit 100 MiB plus
+64 KiB multipart overhead and run for up to ten minutes; keep proxy limits compatible.
+See [transfer tool documentation](../docs/传输通道设计与使用.md).
+
 Run all CI checks locally with:
 
 ```bash

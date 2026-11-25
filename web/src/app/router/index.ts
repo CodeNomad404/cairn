@@ -69,6 +69,12 @@ const routes: RouteRecordRaw[] = [
         meta: { requiresAuth: true },
       },
       {
+        path: 'tools/transfer',
+        name: 'transfer-tool',
+        component: () => import('../../modules/tool/views/TransferView.vue'),
+        meta: { requiresAdmin: true },
+      },
+      {
         path: 'tools/accounting',
         name: 'accounting-tool',
         component: () => import('../../modules/tool/views/AccountingView.vue'),
