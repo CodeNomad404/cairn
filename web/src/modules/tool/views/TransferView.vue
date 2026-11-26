@@ -272,9 +272,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="page transfer-page">
     <header class="transfer-intro">
-      <span class="eyebrow">管理员工具 · 同账号共享</span>
       <h1>传输通道</h1>
-      <p class="lede">把文件和文字留在这里，在另一台电脑接着用。</p>
       <p class="transfer-hint">文件和文本保存 15 天后自动清理，通道长期保留。单文件最多 100 MiB，文本最多 100 KiB，不设总容量上限。</p>
       <p v-if="usage" class="transfer-hint">已保存内容 {{ formatBytes(usage.used_bytes) }}，含等待清理的内容。</p>
     </header>
